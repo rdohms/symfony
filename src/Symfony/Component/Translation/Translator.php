@@ -37,7 +37,7 @@ class Translator implements TranslatorInterface
      *
      * @api
      */
-    public function __construct($locale = null, MessageSelector $selector)
+    public function __construct($locale, MessageSelector $selector)
     {
         $this->locale = $locale;
         $this->selector = $selector;
@@ -71,10 +71,6 @@ class Translator implements TranslatorInterface
      */
     public function addResource($format, $resource, $locale, $domain = 'messages')
     {
-        if (!isset($this->resources[$locale])) {
-            $this->resources[$locale] = array();
-        }
-
         $this->resources[$locale][] = array($format, $resource, $domain);
     }
 
@@ -128,7 +124,7 @@ class Translator implements TranslatorInterface
             $this->loadCatalogue($locale);
         }
 
-        return strtr($this->catalogues[$locale]->get($id, $domain), $parameters);
+        return strtr($this->catalogues[$locale]->get((string) $id, $domain), $parameters);
     }
 
     /**
@@ -146,7 +142,7 @@ class Translator implements TranslatorInterface
             $this->loadCatalogue($locale);
         }
 
-        return strtr($this->selector->choose($this->catalogues[$locale]->get($id, $domain), (int) $number, $locale), $parameters);
+        return strtr($this->selector->choose($this->catalogues[$locale]->get((string) $id, $domain), (int) $number, $locale), $parameters);
     }
 
     protected function loadCatalogue($locale)

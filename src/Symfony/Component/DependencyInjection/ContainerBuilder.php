@@ -15,7 +15,6 @@ use Symfony\Component\DependencyInjection\Compiler\Compiler;
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
 use Symfony\Component\DependencyInjection\Compiler\PassConfig;
 use Symfony\Component\DependencyInjection\Extension\ExtensionInterface;
-use Symfony\Component\DependencyInjection\InterfaceInjector;
 use Symfony\Component\DependencyInjection\ParameterBag\ParameterBagInterface;
 use Symfony\Component\Config\Resource\FileResource;
 use Symfony\Component\Config\Resource\ResourceInterface;
@@ -84,7 +83,7 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
      * Checks if we have an extension.
      *
      * @param string $name The name of the extension
-     * @return boolean If the extension exists
+     * @return Boolean If the extension exists
      */
     public function hasExtension($name)
     {
@@ -144,11 +143,7 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
 
         $namespace = $this->getExtension($extension)->getAlias();
 
-        if (!isset($this->extensionConfigs[$namespace])) {
-            $this->extensionConfigs[$namespace] = array();
-        }
-
-        $this->extensionConfigs[$namespace][] = $this->getParameterBag()->resolveValue($values);
+        $this->extensionConfigs[$namespace][] = $values;
 
         return $this;
     }
@@ -209,7 +204,7 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
     }
 
     /**
-     * Returns all Scope chilren.
+     * Returns all Scope children.
      *
      * @return array An array of scope children.
      */
@@ -241,11 +236,11 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
     }
 
     /**
-     * Removes a service.
+     * Removes a service definition.
      *
      * @param string $id The service identifier
      */
-    public function remove($id)
+    public function removeDefinition($id)
     {
         unset($this->definitions[strtolower($id)]);
     }
@@ -267,8 +262,8 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
     /**
      * Gets a service.
      *
-     * @param  string $id              The service identifier
-     * @param  int    $invalidBehavior The behavior when the service does not exist
+     * @param  string  $id              The service identifier
+     * @param  integer $invalidBehavior The behavior when the service does not exist
      *
      * @return object The associated service
      *
@@ -341,7 +336,6 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
 
         $this->addDefinitions($container->getDefinitions());
         $this->addAliases($container->getAliases());
-        $this->addInterfaceInjectors($container->getInterfaceInjectors());
         $this->getParameterBag()->add($container->getParameterBag()->all());
 
         foreach ($container->getResources() as $resource) {
@@ -429,7 +423,7 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
     /**
      * Sets the service aliases.
      *
-     * @param array $definitions An array of service definitions
+     * @param array $aliases An array of service definitions
      */
     public function setAliases(array $aliases)
     {
@@ -512,74 +506,6 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
         }
 
         return $this->aliases[$id];
-    }
-
-    /**
-     * Adds an InterfaceInjector.
-     *
-     * @param InterfaceInjector $injector
-     */
-    public function addInterfaceInjector(InterfaceInjector $injector)
-    {
-        $class = $injector->getClass();
-        if (isset($this->injectors[$class])) {
-            return $this->injectors[$class]->merge($injector);
-        }
-
-        $this->injectors[$class] = $injector;
-    }
-
-    /**
-     * Adds multiple InterfaceInjectors.
-     *
-     * @param array $injectors An array of InterfaceInjectors
-     */
-    public function addInterfaceInjectors(array $injectors)
-    {
-        foreach ($injectors as $injector) {
-            $this->addInterfaceInjector($injector);
-        }
-    }
-
-    /**
-     * Gets defined InterfaceInjectors.  If a service is provided, only that
-     * support the service will be returned.
-     *
-     * @param string $service If provided, only injectors supporting this service will be returned
-     *
-     * @return array An array of InterfaceInjectors
-     */
-    public function getInterfaceInjectors($service = null)
-    {
-        if (null === $service) {
-            return $this->injectors;
-        }
-
-        return array_filter($this->injectors, function(InterfaceInjector $injector) use ($service) {
-            return $injector->supports($service);
-        });
-    }
-
-    /**
-     * Returns true if an InterfaceInjector is defined for the class.
-     *
-     * @param string $class The class
-     *
-     * @return Boolean true if at least one InterfaceInjector is defined, false otherwise
-     */
-    public function hasInterfaceInjectorForClass($class)
-    {
-        return array_key_exists($class, $this->injectors);
-    }
-
-    /**
-     * Sets the defined InterfaceInjectors.
-     *
-     * @param array $injectors An array of InterfaceInjectors indexed by class names
-     */
-    public function setInterfaceInjectors(array $injectors)
-    {
-        $this->injectors = $injectors;
     }
 
     /**
@@ -697,10 +623,8 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
      */
     public function findDefinition($id)
     {
-        $id = strtolower($id);
-
-        if ($this->hasAlias($id)) {
-            return $this->findDefinition((string) $this->getAlias($id));
+        while ($this->hasAlias($id)) {
+            $id = (string) $this->getAlias($id);
         }
 
         return $this->getDefinition($id);
@@ -740,10 +664,6 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
             $service = null === $r->getConstructor() ? $r->newInstance() : $r->newInstanceArgs($arguments);
         }
 
-        foreach ($this->getInterfaceInjectors($service) as $injector) {
-            $injector->processDefinition($definition, $service);
-        }
-
         if (self::SCOPE_PROTOTYPE !== $scope = $definition->getScope()) {
             if (self::SCOPE_CONTAINER !== $scope && !isset($this->scopedServices[$scope])) {
                 throw new \RuntimeException('You tried to create a service of an inactive scope.');
@@ -770,6 +690,11 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
             if ($ok) {
                 call_user_func_array(array($service, $call[0]), $this->resolveServices($this->getParameterBag()->resolveValue($call[1])));
             }
+        }
+
+        $properties = $this->resolveServices($this->getParameterBag()->resolveValue($definition->getProperties()));
+        foreach ($properties as $name => $value) {
+            $service->$name = $value;
         }
 
         if ($callable = $definition->getConfigurator()) {
@@ -802,8 +727,10 @@ class ContainerBuilder extends Container implements TaggedContainerInterface
             foreach ($value as &$v) {
                 $v = $this->resolveServices($v);
             }
-        } else if (is_object($value) && $value instanceof Reference) {
+        } elseif (is_object($value) && $value instanceof Reference) {
             $value = $this->get((string) $value, $value->getInvalidBehavior());
+        } elseif (is_object($value) && $value instanceof Definition) {
+            $value = $this->createService($value, null);
         }
 
         return $value;

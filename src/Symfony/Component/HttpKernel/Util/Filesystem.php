@@ -25,9 +25,9 @@ class Filesystem
      *
      * By default, if the target already exists, it is not overridden.
      *
-     * @param string $originFile  The original filename
-     * @param string $targetFile  The target filename
-     * @param array  $override    Whether to override an existing file or not
+     * @param string $originFile The original filename
+     * @param string $targetFile The target filename
+     * @param array  $override   Whether to override an existing file or not
      */
     public function copy($originFile, $targetFile, $override = false)
     {
@@ -143,9 +143,9 @@ class Filesystem
     /**
      * Creates a symbolic link or copy a directory.
      *
-     * @param string  $originDir      The origin directory path
-     * @param string  $targetDir      The symbolic link name
-     * @param Boolean $copyOnWindows  Whether to copy files if on windows
+     * @param string  $originDir     The origin directory path
+     * @param string  $targetDir     The symbolic link name
+     * @param Boolean $copyOnWindows Whether to copy files if on windows
      */
     public function symlink($originDir, $targetDir, $copyOnWindows = false)
     {
@@ -206,6 +206,27 @@ class Filesystem
                 throw new \RuntimeException(sprintf('Unable to guess "%s" file type.', $file));
             }
         }
+    }
+
+    /**
+     * Returns whether the file path is an absolute path.
+     *
+     * @param string $file A file path
+     *
+     * @return Boolean
+     */
+    public function isAbsolutePath($file)
+    {
+        if ($file[0] == '/' || $file[0] == '\\'
+            || (strlen($file) > 3 && ctype_alpha($file[0])
+                && $file[1] == ':'
+                && ($file[2] == '\\' || $file[2] == '/')
+            )
+        ) {
+            return true;
+        }
+
+        return false;
     }
 
     private function toIterator($files)

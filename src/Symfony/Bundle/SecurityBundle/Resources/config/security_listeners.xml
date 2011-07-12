@@ -41,6 +41,7 @@
 
     <services>
         <service id="security.authentication.listener.anonymous" class="%security.authentication.listener.anonymous.class%" public="false">
+            <tag name="monolog.logger" channel="security" />
             <argument type="service" id="security.context" />
             <argument /> <!-- Key -->
             <argument type="service" id="logger" on-invalid="null" />
@@ -57,6 +58,7 @@
         <service id="security.authentication.digest_entry_point" class="%security.authentication.digest_entry_point.class%" public="false" />
 
         <service id="security.channel_listener" class="%security.channel_listener.class%" public="false">
+            <tag name="monolog.logger" channel="security" />
             <argument type="service" id="security.access_map" />
             <argument type="service" id="security.authentication.retry_entry_point" />
             <argument type="service" id="logger" on-invalid="null" />
@@ -65,6 +67,7 @@
         <service id="security.access_map" class="%security.access_map.class%" public="false" />
 
         <service id="security.context_listener" class="%security.context_listener.class%" public="false">
+            <tag name="monolog.logger" channel="security" />
             <argument type="service" id="security.context" />
             <argument type="collection"></argument>
             <argument /> <!-- Provider Key -->
@@ -74,6 +77,7 @@
 
         <service id="security.logout_listener" class="%security.logout_listener.class%" public="false" abstract="true">
             <argument type="service" id="security.context" />
+            <argument type="service" id="security.http_utils" />
             <argument /> <!-- Logout Path -->
             <argument /> <!-- Target-URL Path -->
             <argument type="service" id="security.logout.success_handler" on-invalid="null" />
@@ -86,24 +90,27 @@
         </service>
 
         <service id="security.authentication.listener.abstract" abstract="true" public="false">
+            <tag name="monolog.logger" channel="security" />
             <argument type="service" id="security.context" />
             <argument type="service" id="security.authentication.manager" />
             <argument type="service" id="security.authentication.session_strategy" />
+            <argument type="service" id="security.http_utils" />
             <argument />
             <argument type="collection"></argument>
             <argument type="service" id="security.authentication.success_handler" on-invalid="null" />
             <argument type="service" id="security.authentication.failure_handler" on-invalid="null" />
             <argument type="service" id="logger" on-invalid="null" />
-            <argument type="service" id="event_dispatcher" on-invalid="null"/>
+            <argument type="service" id="event_dispatcher" on-invalid="null" />
         </service>
 
-        <service id="security.authentication.listener.form" 
-                 class="%security.authentication.listener.form.class%" 
+        <service id="security.authentication.listener.form"
+                 class="%security.authentication.listener.form.class%"
                  parent="security.authentication.listener.abstract"
                  abstract="true">
         </service>
 
         <service id="security.authentication.listener.x509" class="%security.authentication.listener.x509.class%" public="false" abstract="true">
+            <tag name="monolog.logger" channel="security" />
             <argument type="service" id="security.context" />
             <argument type="service" id="security.authentication.manager" />
             <argument /> <!-- Provider-shared Key -->
@@ -114,6 +121,7 @@
         </service>
 
         <service id="security.authentication.listener.basic" class="%security.authentication.listener.basic.class%" public="false" abstract="true">
+            <tag name="monolog.logger" channel="security" />
             <argument type="service" id="security.context" />
             <argument type="service" id="security.authentication.manager" />
             <argument /> <!-- Provider-shared Key -->
@@ -122,6 +130,7 @@
         </service>
 
         <service id="security.authentication.listener.digest" class="%security.authentication.listener.digest.class%" public="false" abstract="true">
+            <tag name="monolog.logger" channel="security" />
             <argument type="service" id="security.context" />
             <argument /> <!-- User Provider -->
             <argument /> <!-- Provider-shared Key -->
@@ -134,6 +143,7 @@
             <argument type="service" id="security.user_checker" />
             <argument /> <!-- Provider-shared Key -->
             <argument type="service" id="security.encoder_factory" />
+            <argument>%security.authentication.hide_user_not_found%</argument>
         </service>
 
         <service id="security.authentication.provider.pre_authenticated" class="%security.authentication.provider.pre_authenticated.class%" abstract="true" public="false">
@@ -142,8 +152,10 @@
         </service>
 
         <service id="security.exception_listener" class="%security.exception_listener.class%" public="false" abstract="true">
+            <tag name="monolog.logger" channel="security" />
             <argument type="service" id="security.context" />
             <argument type="service" id="security.authentication.trust_resolver" />
+            <argument type="service" id="security.http_utils" />
             <argument type="service" id="security.authentication.entry_point" on-invalid="null" />
             <argument>%security.access.denied_url%</argument>
             <argument type="service" id="security.access.denied_handler" on-invalid="null" />
@@ -151,6 +163,7 @@
         </service>
 
         <service id="security.authentication.switchuser_listener" class="%security.authentication.switchuser_listener.class%" public="false" abstract="true">
+            <tag name="monolog.logger" channel="security" />
             <argument type="service" id="security.context" />
             <argument /> <!-- User Provider -->
             <argument type="service" id="security.user_checker" />
@@ -163,6 +176,7 @@
         </service>
 
         <service id="security.access_listener" class="%security.access_listener.class%" public="false">
+            <tag name="monolog.logger" channel="security" />
             <argument type="service" id="security.context" />
             <argument type="service" id="security.access.decision_manager" />
             <argument type="service" id="security.access_map" />

@@ -1,9 +1,18 @@
 <?php
 
+/*
+ * This file is part of the Symfony framework.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * This source file is subject to the MIT license that is bundled
+ * with this source code in the file LICENSE.
+ */
+
 namespace Symfony\Tests\Component\Config\Definition\Builder;
 
-use Symfony\Component\Config\Definition\Builder\NodeBuilder;
-use Symfony\Component\Config\Definition\Builder\VariableNodeDefinition;
+use Symfony\Component\Config\Definition\Builder\NodeBuilder as BaseNodeBuilder;
+use Symfony\Component\Config\Definition\Builder\VariableNodeDefinition as BaseVariableNodeDefinition;
 
 class NodeBuilderTest extends \PHPUnit_Framework_TestCase
 {
@@ -12,7 +21,7 @@ class NodeBuilderTest extends \PHPUnit_Framework_TestCase
      */
     public function testThrowsAnExceptionWhenTryingToCreateANonRegisteredNodeType()
     {
-        $builder = new NodeBuilder();
+        $builder = new BaseNodeBuilder();
         $builder->node('', 'foobar');
     }
 
@@ -21,7 +30,7 @@ class NodeBuilderTest extends \PHPUnit_Framework_TestCase
      */
     public function testThrowsAnExceptionWhenTheNodeClassIsNotFound()
     {
-        $builder = new NodeBuilder();
+        $builder = new BaseNodeBuilder();
         $builder
             ->setNodeClass('noclasstype', '\\foo\\bar\\noclass')
             ->node('', 'noclasstype');
@@ -30,8 +39,8 @@ class NodeBuilderTest extends \PHPUnit_Framework_TestCase
     public function testAddingANewNodeType()
     {
         $class = __NAMESPACE__.'\\SomeNodeDefinition';
-        
-        $builder = new NodeBuilder();
+
+        $builder = new BaseNodeBuilder();
         $node = $builder
             ->setNodeClass('newtype', $class)
             ->node('', 'newtype');
@@ -43,7 +52,7 @@ class NodeBuilderTest extends \PHPUnit_Framework_TestCase
     {
         $class = __NAMESPACE__.'\\SomeNodeDefinition';
 
-        $builder = new NodeBuilder();
+        $builder = new BaseNodeBuilder();
         $node = $builder
             ->setNodeClass('variable', $class)
             ->node('', 'variable');
@@ -53,7 +62,7 @@ class NodeBuilderTest extends \PHPUnit_Framework_TestCase
 
     public function testNodeTypesAreNotCaseSensitive()
     {
-        $builder = new NodeBuilder();
+        $builder = new BaseNodeBuilder();
 
         $node1 = $builder->node('', 'VaRiAbLe');
         $node2 = $builder->node('', 'variable');
@@ -66,9 +75,9 @@ class NodeBuilderTest extends \PHPUnit_Framework_TestCase
         $node2 = $builder->node('', 'custom');
 
         $this->assertEquals(get_class($node1), get_class($node2));
-    }    
+    }
 }
 
-class SomeNodeDefinition extends VariableNodeDefinition
+class SomeNodeDefinition extends BaseVariableNodeDefinition
 {
 }

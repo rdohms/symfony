@@ -1,6 +1,7 @@
 <?php
 
 $container->loadFromExtension('security', array(
+    'acl' => array(),
     'encoders' => array(
         'JMS\FooBundle\Entity\User1' => 'plaintext',
         'JMS\FooBundle\Entity\User2' => array(
@@ -33,7 +34,7 @@ $container->loadFromExtension('security', array(
             ),
         ),
         'doctrine' => array(
-            'entity' => array('class' => 'Security:User', 'property' => 'username')
+            'entity' => array('class' => 'SecurityBundle:User', 'property' => 'username')
         ),
         'service' => array(
             'id' => 'user.manager',

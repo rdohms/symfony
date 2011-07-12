@@ -11,6 +11,7 @@
 
 namespace Symfony\Tests\Component\Validator;
 
+use Doctrine\Common\Annotations\AnnotationReader;
 use Symfony\Component\Validator\Validator;
 use Symfony\Component\Validator\ValidatorContext;
 use Symfony\Component\Validator\ValidatorFactory;
@@ -33,14 +34,20 @@ class ValidatorFactoryTest extends \PHPUnit_Framework_TestCase
         $this->factory = new ValidatorFactory($this->defaultContext);
     }
 
+    protected function tearDown()
+    {
+        $this->defaultContext = null;
+        $this->factory = null;
+    }
+
     public function testOverrideClassMetadataFactory()
     {
         $factory1 = $this->getMock('Symfony\Component\Validator\Mapping\ClassMetadataFactoryInterface');
         $factory2 = $this->getMock('Symfony\Component\Validator\Mapping\ClassMetadataFactoryInterface');
 
-        $this->defaultContext->classMetadataFactory($factory1);
+        $this->defaultContext->setClassMetadataFactory($factory1);
 
-        $result = $this->factory->classMetadataFactory($factory2);
+        $result = $this->factory->setClassMetadataFactory($factory2);
 
         $this->assertSame($factory1, $this->defaultContext->getClassMetadataFactory());
         $this->assertSame($factory2, $result->getClassMetadataFactory());
@@ -51,9 +58,9 @@ class ValidatorFactoryTest extends \PHPUnit_Framework_TestCase
         $factory1 = $this->getMock('Symfony\Component\Validator\ConstraintValidatorFactoryInterface');
         $factory2 = $this->getMock('Symfony\Component\Validator\ConstraintValidatorFactoryInterface');
 
-        $this->defaultContext->constraintValidatorFactory($factory1);
+        $this->defaultContext->setConstraintValidatorFactory($factory1);
 
-        $result = $this->factory->constraintValidatorFactory($factory2);
+        $result = $this->factory->setConstraintValidatorFactory($factory2);
 
         $this->assertSame($factory1, $this->defaultContext->getConstraintValidatorFactory());
         $this->assertSame($factory2, $result->getConstraintValidatorFactory());
@@ -65,8 +72,8 @@ class ValidatorFactoryTest extends \PHPUnit_Framework_TestCase
         $validatorFactory = $this->getMock('Symfony\Component\Validator\ConstraintValidatorFactoryInterface');
 
         $this->defaultContext
-            ->classMetadataFactory($metadataFactory)
-            ->constraintValidatorFactory($validatorFactory);
+            ->setClassMetadataFactory($metadataFactory)
+            ->setConstraintValidatorFactory($validatorFactory);
 
         $validator = $this->factory->getValidator();
 
@@ -76,14 +83,14 @@ class ValidatorFactoryTest extends \PHPUnit_Framework_TestCase
     public function testBuildDefaultFromAnnotations()
     {
         if (!class_exists('Doctrine\Common\Annotations\AnnotationReader')) {
-            $this->markTestSkipped('Doctrine is required for this test');
+            $this->markTestSkipped('Annotations is required for this test');
         }
         $factory = ValidatorFactory::buildDefault();
 
         $context = new ValidatorContext();
         $context
-            ->classMetadataFactory(new ClassMetadataFactory(new AnnotationLoader()))
-            ->constraintValidatorFactory(new ConstraintValidatorFactory());
+            ->setClassMetadataFactory(new ClassMetadataFactory(new AnnotationLoader(new AnnotationReader())))
+            ->setConstraintValidatorFactory(new ConstraintValidatorFactory());
 
         $this->assertEquals(new ValidatorFactory($context), $factory);
     }
@@ -91,18 +98,14 @@ class ValidatorFactoryTest extends \PHPUnit_Framework_TestCase
     public function testBuildDefaultFromAnnotationsWithCustomNamespaces()
     {
         if (!class_exists('Doctrine\Common\Annotations\AnnotationReader')) {
-            $this->markTestSkipped('Doctrine is required for this test');
+            $this->markTestSkipped('Annotations is required for this test');
         }
-        $factory = ValidatorFactory::buildDefault(array(), true, array(
-            'myns' => 'My\\Namespace\\',
-        ));
+        $factory = ValidatorFactory::buildDefault(array(), true);
 
         $context = new ValidatorContext();
         $context
-            ->classMetadataFactory(new ClassMetadataFactory(new AnnotationLoader(array(
-                'myns' => 'My\\Namespace\\',
-            ))))
-            ->constraintValidatorFactory(new ConstraintValidatorFactory());
+            ->setClassMetadataFactory(new ClassMetadataFactory(new AnnotationLoader(new AnnotationReader())))
+            ->setConstraintValidatorFactory(new ConstraintValidatorFactory());
 
         $this->assertEquals(new ValidatorFactory($context), $factory);
     }
@@ -114,8 +117,8 @@ class ValidatorFactoryTest extends \PHPUnit_Framework_TestCase
 
         $context = new ValidatorContext();
         $context
-            ->classMetadataFactory(new ClassMetadataFactory(new XmlFilesLoader(array($path))))
-            ->constraintValidatorFactory(new ConstraintValidatorFactory());
+            ->setClassMetadataFactory(new ClassMetadataFactory(new XmlFilesLoader(array($path))))
+            ->setConstraintValidatorFactory(new ConstraintValidatorFactory());
 
         $this->assertEquals(new ValidatorFactory($context), $factory);
     }
@@ -127,8 +130,8 @@ class ValidatorFactoryTest extends \PHPUnit_Framework_TestCase
 
         $context = new ValidatorContext();
         $context
-            ->classMetadataFactory(new ClassMetadataFactory(new YamlFilesLoader(array($path))))
-            ->constraintValidatorFactory(new ConstraintValidatorFactory());
+            ->setClassMetadataFactory(new ClassMetadataFactory(new YamlFilesLoader(array($path))))
+            ->setConstraintValidatorFactory(new ConstraintValidatorFactory());
 
         $this->assertEquals(new ValidatorFactory($context), $factory);
     }
@@ -136,12 +139,12 @@ class ValidatorFactoryTest extends \PHPUnit_Framework_TestCase
     public function testBuildDefaultFromStaticMethod()
     {
         $path = __DIR__.'/Mapping/Loader/constraint-mapping.yml';
-        $factory = ValidatorFactory::buildDefault(array(), false, null, 'loadMetadata');
+        $factory = ValidatorFactory::buildDefault(array(), false, 'loadMetadata');
 
         $context = new ValidatorContext();
         $context
-            ->classMetadataFactory(new ClassMetadataFactory(new StaticMethodLoader('loadMetadata')))
-            ->constraintValidatorFactory(new ConstraintValidatorFactory());
+            ->setClassMetadataFactory(new ClassMetadataFactory(new StaticMethodLoader('loadMetadata')))
+            ->setConstraintValidatorFactory(new ConstraintValidatorFactory());
 
         $this->assertEquals(new ValidatorFactory($context), $factory);
     }
@@ -149,23 +152,23 @@ class ValidatorFactoryTest extends \PHPUnit_Framework_TestCase
     public function testBuildDefaultFromMultipleLoaders()
     {
         if (!class_exists('Doctrine\Common\Annotations\AnnotationReader')) {
-            $this->markTestSkipped('Doctrine is required for this test');
+            $this->markTestSkipped('Annotations is required for this test');
         }
         $xmlPath = __DIR__.'/Mapping/Loader/constraint-mapping.xml';
         $yamlPath = __DIR__.'/Mapping/Loader/constraint-mapping.yml';
-        $factory = ValidatorFactory::buildDefault(array($xmlPath, $yamlPath), true, null, 'loadMetadata');
+        $factory = ValidatorFactory::buildDefault(array($xmlPath, $yamlPath), true, 'loadMetadata');
 
         $chain = new LoaderChain(array(
             new XmlFilesLoader(array($xmlPath)),
             new YamlFilesLoader(array($yamlPath)),
-            new AnnotationLoader(),
+            new AnnotationLoader(new AnnotationReader()),
             new StaticMethodLoader('loadMetadata'),
         ));
 
         $context = new ValidatorContext();
         $context
-            ->classMetadataFactory(new ClassMetadataFactory($chain))
-            ->constraintValidatorFactory(new ConstraintValidatorFactory());
+            ->setClassMetadataFactory(new ClassMetadataFactory($chain))
+            ->setConstraintValidatorFactory(new ConstraintValidatorFactory());
 
         $this->assertEquals(new ValidatorFactory($context), $factory);
     }

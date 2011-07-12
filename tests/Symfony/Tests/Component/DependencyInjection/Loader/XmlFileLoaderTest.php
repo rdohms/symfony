@@ -104,6 +104,9 @@ class XmlFileLoaderTest extends \PHPUnit_Framework_TestCase
         $expected = array('a string', 'foo' => 'bar', 'values' => array(true, false), 'foo_bar' => new Reference('foo_bar'), 'mixedcase' => array('MixedCaseKey' => 'value'), 'bar' => '%foo%', 'imported_from_ini' => true, 'imported_from_yaml' => true);
 
         $this->assertEquals(array_keys($expected), array_keys($actual), '->load() imports and merges imported files');
+
+        // Bad import throws no exception due to ignore_errors value.
+        $loader->load('services4_bad_import.xml');
     }
 
     public function testLoadAnonymousServices()
@@ -286,14 +289,25 @@ class XmlFileLoaderTest extends \PHPUnit_Framework_TestCase
         $this->assertFalse($loader->supports('foo.foo'), '->supports() returns true if the resource is loadable');
     }
 
-    public function testLoadInterfaceInjectors()
+    public function testNoNamingConflictsForAnonymousServices()
     {
         $container = new ContainerBuilder();
-        $loader = new XmlFileLoader($container, new FileLocator(self::$fixturesPath.'/xml'));
-        $loader->load('interfaces1.xml');
-        $interfaces = $container->getInterfaceInjectors('FooClass');
-        $this->assertEquals(1, count($interfaces), '->load() parses <interface> elements');
-        $interface = $interfaces['FooClass'];
-        $this->assertTrue($interface->hasMethodCall('setBar'), '->load() applies method calls correctly');
+
+        $loader1 = new XmlFileLoader($container, new FileLocator(self::$fixturesPath.'/xml/extension1'));
+        $loader1->load('services.xml');
+        $services = $container->getDefinitions();
+        $this->assertEquals(2, count($services), '->load() attributes unique ids to anonymous services');
+        $loader2 = new XmlFileLoader($container, new FileLocator(self::$fixturesPath.'/xml/extension2'));
+        $loader2->load('services.xml');
+        $services = $container->getDefinitions();
+        $this->assertEquals(4, count($services), '->load() attributes unique ids to anonymous services');
+
+        $services = $container->getDefinitions();
+        $args1 = $services['extension1.foo']->getArguments();
+        $inner1 = $services[(string) $args1[0]];
+        $this->assertEquals('BarClass1', $inner1->getClass(), '->load() uses the same configuration as for the anonymous ones');
+        $args2 = $services['extension2.foo']->getArguments();
+        $inner2 = $services[(string) $args2[0]];
+        $this->assertEquals('BarClass2', $inner2->getClass(), '->load() uses the same configuration as for the anonymous ones');
     }
 }

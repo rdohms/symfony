@@ -29,23 +29,15 @@ use Symfony\Component\Console\Formatter\OutputFormatter;
  */
 abstract class Output implements OutputInterface
 {
-    const VERBOSITY_QUIET   = 0;
-    const VERBOSITY_NORMAL  = 1;
-    const VERBOSITY_VERBOSE = 2;
-
-    const OUTPUT_NORMAL = 0;
-    const OUTPUT_RAW = 1;
-    const OUTPUT_PLAIN = 2;
-
     private $verbosity;
     private $formatter;
 
     /**
      * Constructor.
      *
-     * @param integer                   $verbosity  The verbosity level (self::VERBOSITY_QUIET, self::VERBOSITY_NORMAL, self::VERBOSITY_VERBOSE)
-     * @param Boolean                   $decorated  Whether to decorate messages or not (null for auto-guessing)
-     * @param OutputFormatterInterface  $formatter  Output formatter instance
+     * @param integer                  $verbosity The verbosity level (self::VERBOSITY_QUIET, self::VERBOSITY_NORMAL, self::VERBOSITY_VERBOSE)
+     * @param Boolean                  $decorated Whether to decorate messages or not (null for auto-guessing)
+     * @param OutputFormatterInterface $formatter Output formatter instance
      *
      * @api
      */
@@ -63,7 +55,7 @@ abstract class Output implements OutputInterface
     /**
      * Sets output formatter.
      *
-     * @param   OutputFormatterInterface    $formatter
+     * @param OutputFormatterInterface $formatter
      *
      * @api
      */
@@ -162,18 +154,16 @@ abstract class Output implements OutputInterface
             return;
         }
 
-        if (!is_array($messages)) {
-            $messages = array($messages);
-        }
+        $messages = (array) $messages;
 
         foreach ($messages as $message) {
             switch ($type) {
-                case Output::OUTPUT_NORMAL:
+                case OutputInterface::OUTPUT_NORMAL:
                     $message = $this->formatter->format($message);
                     break;
-                case Output::OUTPUT_RAW:
+                case OutputInterface::OUTPUT_RAW:
                     break;
-                case Output::OUTPUT_PLAIN:
+                case OutputInterface::OUTPUT_PLAIN:
                     $message = strip_tags($this->formatter->format($message));
                     break;
                 default:

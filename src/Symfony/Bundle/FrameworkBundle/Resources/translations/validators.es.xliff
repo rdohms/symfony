@@ -111,7 +111,7 @@
                 <target>Este valor debería ser una instancia de la clase {{ class }}</target>
             </trans-unit>
             <trans-unit id="28">
-                <source>This field group should not contain extra fields</source>
+                <source>This form should not contain extra fields</source>
                 <target>Este grupo de campos no debería contener campos adicionales</target>
             </trans-unit>
             <trans-unit id="29">
@@ -125,6 +125,18 @@
             <trans-unit id="31">
                 <source>The two values should be equal</source>
                 <target>Los dos valores deberían ser iguales</target>
+            </trans-unit>
+            <trans-unit id="32">
+                <source>The file is too large. Allowed maximum size is {{ limit }}</source>
+                <target>El archivo es demasiado grande. El tamaño máximo permitido es {{ limit }}</target>
+            </trans-unit>
+            <trans-unit id="33">
+                <source>The file is too large</source>
+                <target>El archivo es demasiado grande</target>
+            </trans-unit>
+            <trans-unit id="34">
+                <source>The file could not be uploaded</source>
+                <target>No se pudo subir el archivo</target>
             </trans-unit>
         </body>
     </file>

@@ -9,7 +9,7 @@
  * file that was distributed with this source code.
  */
 
-namespace Symfony\Tests\Component\Validator;
+namespace Symfony\Tests\Component\Validator\Constraints;
 
 use Symfony\Component\Validator\Constraints\NotBlank;
 use Symfony\Component\Validator\Constraints\NotBlankValidator;
@@ -21,6 +21,11 @@ class NotBlankValidatorTest extends \PHPUnit_Framework_TestCase
     protected function setUp()
     {
         $this->validator = new NotBlankValidator();
+    }
+
+    protected function tearDown()
+    {
+        $this->validator = null;
     }
 
     /**

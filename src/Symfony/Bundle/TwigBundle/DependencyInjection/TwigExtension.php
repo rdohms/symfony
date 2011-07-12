@@ -39,10 +39,10 @@ class TwigExtension extends Extension
 
         $processor = new Processor();
         $configuration = new Configuration();
-
-        $config = $processor->process($configuration->getConfigTree(), $configs);
+        $config = $processor->processConfiguration($configuration, $configs);
 
         $container->setParameter('twig.form.resources', $config['form']['resources']);
+        $container->getDefinition('twig.loader')->addMethodCall('addPath', array(__DIR__.'/../../../Bridge/Twig/Resources/views/Form'));
 
         if (!empty($config['globals'])) {
             $def = $container->getDefinition('twig');
@@ -55,21 +55,10 @@ class TwigExtension extends Extension
             }
         }
 
-        if (!empty($config['extensions'])) {
-            foreach ($config['extensions'] as $id) {
-                $container->getDefinition($id)->addTag('twig.extension');
-            }
-        }
-
-        if (!empty($config['cache_warmer'])) {
-            $container->getDefinition('twig.cache_warmer')->addTag('kernel.cache_warmer');
-        }
-
         unset(
             $config['form'],
             $config['globals'],
-            $config['extensions'],
-            $config['cache_warmer']
+            $config['extensions']
         );
 
         $container->setParameter('twig.options', $config);

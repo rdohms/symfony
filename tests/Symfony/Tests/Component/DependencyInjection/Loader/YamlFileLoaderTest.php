@@ -90,6 +90,9 @@ class YamlFileLoaderTest extends \PHPUnit_Framework_TestCase
         $actual = $container->getParameterBag()->all();
         $expected = array('foo' => 'bar', 'values' => array(true, false), 'bar' => '%foo%', 'foo_bar' => new Reference('foo_bar'), 'mixedcase' => array('MixedCaseKey' => 'value'), 'imported_from_ini' => true, 'imported_from_xml' => true);
         $this->assertEquals(array_keys($expected), array_keys($actual), '->load() imports and merges imported files');
+
+        // Bad import throws no exception due to ignore_errors value.
+        $loader->load('services4_bad_import.yml');
     }
 
     public function testLoadServices()
@@ -159,17 +162,6 @@ class YamlFileLoaderTest extends \PHPUnit_Framework_TestCase
         $this->assertFalse($loader->supports('foo.foo'), '->supports() returns true if the resource is loadable');
     }
 
-    public function testLoadInterfaceInjectors()
-    {
-        $container = new ContainerBuilder();
-        $loader = new YamlFileLoader($container, new FileLocator(self::$fixturesPath.'/yaml'));
-        $loader->load('interfaces1.yml');
-        $interfaces = $container->getInterfaceInjectors('FooClass');
-        $this->assertEquals(1, count($interfaces), '->load() parses interfaces');
-        $interface = $interfaces['FooClass'];
-        $this->assertTrue($interface->hasMethodCall('setBar'), '->load() parses interfaces elements');
-    }
-
     public function testNonArrayTagThrowsException()
     {
         $loader = new YamlFileLoader(new ContainerBuilder(), new FileLocator(self::$fixturesPath.'/yaml'));
@@ -190,7 +182,7 @@ class YamlFileLoaderTest extends \PHPUnit_Framework_TestCase
             $this->fail('->load() should throw an exception when a tag is missing the name key');
         } catch (\Exception $e) {
             $this->assertInstanceOf('\InvalidArgumentException', $e, '->load() throws an InvalidArgumentException if a tag is missing the name key');
-            $this->assertStringStartsWith('A "tags" entry is missing a "name" key must be an array for service ', $e->getMessage(), '->load() throws an InvalidArgumentException if a tag is missing the name key');
+            $this->assertStringStartsWith('A "tags" entry is missing a "name" key for service ', $e->getMessage(), '->load() throws an InvalidArgumentException if a tag is missing the name key');
         }
     }
 }

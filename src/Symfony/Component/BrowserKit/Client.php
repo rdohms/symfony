@@ -109,6 +109,29 @@ abstract class Client
     }
 
     /**
+     * Sets single server parameter.
+     *
+     * @param string $key   A key of the parameter
+     * @param string $value A value of the parameter
+     */
+    public function setServerParameter($key, $value)
+    {
+        $this->server[$key] = $value;
+    }
+
+    /**
+     * Gets single server parameter for specified key.
+     *
+     * @param string $key     A key of the parameter to get
+     * @param string $default A default value when key is undefined
+     * @return string A value of the parameter
+     */
+    public function getServerParameter($key, $default = '')
+    {
+        return (isset($this->server[$key])) ? $this->server[$key] : $default;
+    }
+
+    /**
      * Returns the History instance.
      *
      * @return History A History instance
@@ -177,6 +200,10 @@ abstract class Client
      */
     public function click(Link $link)
     {
+        if ($link instanceof Form) {
+            return $this->submit($link);
+        }
+
         return $this->request($link->getMethod(), $link->getUri());
     }
 
@@ -262,7 +289,7 @@ abstract class Client
         $process = new PhpProcess($this->getScript($request));
         $process->run();
 
-        if (!$process->isSuccessful()) {
+        if (!$process->isSuccessful() || !preg_match('/^O\:\d+\:/', $process->getOutput())) {
             throw new \RuntimeException($process->getErrorOutput());
         }
 

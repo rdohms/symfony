@@ -24,31 +24,62 @@ class MimeTypeTest extends \PHPUnit_Framework_TestCase
 
     public function testGuessImageWithoutExtension()
     {
-        $this->assertEquals('image/gif', MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/test'));
+        if (extension_loaded('fileinfo')) {
+            $this->assertEquals('image/gif', MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/test'));
+        } else {
+            $this->assertNull(MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/test'));
+        }
+    }
+
+    public function testGuessImageWithDirectory()
+    {
+        if (extension_loaded('fileinfo')) {
+            $this->setExpectedException('Symfony\Component\HttpFoundation\File\Exception\FileNotFoundException');
+
+            $this->assertEquals('image/gif', MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/directory'));
+        } else {
+            $this->assertNull(MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/directory'));
+        }
     }
 
     public function testGuessImageWithContentTypeMimeTypeGuesser()
     {
         $guesser = MimeTypeGuesser::getInstance();
         $guesser->register(new ContentTypeMimeTypeGuesser());
-        $this->assertEquals('image/gif', $guesser->guess(__DIR__.'/../Fixtures/test'));
+        if (extension_loaded('fileinfo')) {
+            $this->assertEquals('image/gif', MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/test'));
+        } else {
+            $this->assertNull(MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/test'));
+        }
     }
 
     public function testGuessImageWithFileBinaryMimeTypeGuesser()
     {
         $guesser = MimeTypeGuesser::getInstance();
         $guesser->register(new FileBinaryMimeTypeGuesser());
-        $this->assertEquals('image/gif', $guesser->guess(__DIR__.'/../Fixtures/test'));
+        if (extension_loaded('fileinfo')) {
+            $this->assertEquals('image/gif', MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/test'));
+        } else {
+            $this->assertNull(MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/test'));
+        }
     }
 
     public function testGuessImageWithKnownExtension()
     {
-        $this->assertEquals('image/gif', MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/test.gif'));
+        if (extension_loaded('fileinfo')) {
+            $this->assertEquals('image/gif', MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/test.gif'));
+        } else {
+            $this->assertNull(MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/test.gif'));
+        }
     }
 
     public function testGuessFileWithUnknownExtension()
     {
-        $this->assertEquals('application/octet-stream', MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/.unknownextension'));
+        if (extension_loaded('fileinfo')) {
+            $this->assertEquals('application/octet-stream', MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/.unknownextension'));
+        } else {
+            $this->assertNull(MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/.unknownextension'));
+        }
     }
 
     public function testGuessWithIncorrectPath()
@@ -62,12 +93,17 @@ class MimeTypeTest extends \PHPUnit_Framework_TestCase
         if (strstr(PHP_OS, 'WIN')) {
             $this->markTestSkipped('Can not verify chmod operations on Windows');
         }
+
         $path = __DIR__.'/../Fixtures/to_delete';
         touch($path);
         chmod($path, 0333);
 
-        $this->setExpectedException('Symfony\Component\HttpFoundation\File\Exception\AccessDeniedException');
-        MimeTypeGuesser::getInstance()->guess($path);
+        if (substr(sprintf('%o', fileperms($path)), -4) == '0333') {
+            $this->setExpectedException('Symfony\Component\HttpFoundation\File\Exception\AccessDeniedException');
+            MimeTypeGuesser::getInstance()->guess($path);
+        } else {
+            $this->markTestSkipped('Can not verify chmod operations, change of file permissions failed');
+        }
     }
 
     public static function tearDownAfterClass()

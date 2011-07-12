@@ -12,7 +12,7 @@
 namespace Symfony\Component\DependencyInjection\ParameterBag;
 
 /**
- * 
+ *
  * @author Fabien Potencier <fabien@symfony.com>
  */
 class FrozenParameterBag extends ParameterBag
@@ -30,6 +30,7 @@ class FrozenParameterBag extends ParameterBag
     public function __construct(array $parameters = array())
     {
         $this->parameters = $parameters;
+        $this->resolved = true;
     }
 
     /**

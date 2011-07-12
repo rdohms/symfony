@@ -246,6 +246,10 @@ class MutableAclProvider extends AclProvider implements MutableAclProviderInterf
                 }
 
                 $this->regenerateAncestorRelations($acl);
+                $childAcls = $this->findAcls($this->findChildren($acl->getObjectIdentity(), false));
+                foreach ($childAcls as $childOid) {
+                    $this->regenerateAncestorRelations($childAcls[$childOid]);
+                }
             }
 
             // this includes only updates of existing ACEs, but neither the creation, nor
@@ -776,7 +780,7 @@ QUERY;
                     $aceId = $this->connection->executeQuery($this->getSelectAccessControlEntryIdSql($classId, $objectIdentityId, $field, $i))->fetchColumn();
                     $this->loadedAces[$aceId] = $ace;
 
-                    $aceIdProperty = new \ReflectionProperty($ace, 'id');
+                    $aceIdProperty = new \ReflectionProperty('Symfony\Component\Security\Acl\Domain\Entry', 'id');
                     $aceIdProperty->setAccessible(true);
                     $aceIdProperty->setValue($ace, intval($aceId));
                 } else {

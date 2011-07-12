@@ -11,7 +11,7 @@
 
 namespace Symfony\Component\DependencyInjection\Dumper;
 
-use Symfony\Component\DependencyInjection\Exception\CircularReferenceException;
+use Symfony\Component\DependencyInjection\Exception\ServiceCircularReferenceException;
 use Symfony\Component\DependencyInjection\Variable;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
@@ -86,50 +86,9 @@ class PhpDumper extends Dumper
         $code .=
             $this->addServices().
             $this->addDefaultParametersMethod().
-            $this->addInterfaceInjectors().
             $this->endClass()
         ;
 
-        return $code;
-    }
-
-    /**
-     * Returns applyInterfaceInjectors function for the dumper.
-     *
-     * @return string
-     */
-    private function addInterfaceInjectors()
-    {
-        if ($this->container->isFrozen() || 0 === count($this->container->getInterfaceInjectors())) {
-            return;
-        }
-
-        $code = <<<EOF
-
-    /**
-     * Applies all known interface injection calls
-     *
-     * @param Object \$instance
-     */
-    protected function applyInterfaceInjectors(\$instance)
-    {
-
-EOF;
-        foreach ($this->container->getInterfaceInjectors() as $injector) {
-            $code .= sprintf("        if (\$instance instanceof \\%s) {\n", $injector->getClass());
-            foreach ($injector->getMethodCalls() as $call) {
-                $arguments = array();
-                foreach ($call[1] as $value) {
-                    $arguments[] = $this->dumpValue($value);
-                }
-                $code .= $this->wrapServiceConditionals($call[1], sprintf("            \$instance->%s(%s);\n", $call[0], implode(', ', $arguments)));
-            }
-            $code .= sprintf("        }\n");
-        }
-        $code .= <<<EOF
-    }
-
-EOF;
         return $code;
     }
 
@@ -253,7 +212,7 @@ EOF;
                 // $a = new ServiceA(ServiceB $b);
                 // $b->setServiceA(ServiceA $a);
                 if ($this->hasReference($id, $sDefinition->getArguments())) {
-                    throw new CircularReferenceException($id, array($id));
+                    throw new ServiceCircularReferenceException($id, array($id));
                 }
 
                 $arguments = array();
@@ -371,14 +330,10 @@ EOF;
      *
      * @param string $id
      * @param Definition $definition
-     * @return boolean
+     * @return Boolean
      */
     private function isSimpleInstance($id, $definition)
     {
-        if (!$this->container->isFrozen() && count($this->container->getInterfaceInjectors()) > 0) {
-            return false;
-        }
-
         foreach (array_merge(array($definition), $this->getInlinedDefinitions($definition)) as $sDefinition) {
             if ($definition !== $sDefinition && !$this->hasReference($id, $sDefinition->getMethodCalls())) {
                 continue;
@@ -412,10 +367,6 @@ EOF;
             $calls .= $this->wrapServiceConditionals($call[1], sprintf("        \$%s->%s(%s);\n", $variableName, $call[0], implode(', ', $arguments)));
         }
 
-        if (!$this->container->isFrozen() && count($this->container->getInterfaceInjectors()) > 0) {
-            $calls .= sprintf("\n        \$this->applyInterfaceInjectors(\$%s);\n", $variableName);
-        }
-
         return $calls;
     }
 
@@ -423,9 +374,7 @@ EOF;
     {
         $code = '';
         foreach ($definition->getProperties() as $name => $value) {
-            $code .= sprintf("        \$%s = new \ReflectionProperty(\$%s, %s);\n", $refName = $this->getNextVariableName(), $variableName, var_export($name, true));
-            $code .= sprintf("        \$%s->setAccessible(true);\n", $refName);
-            $code .= sprintf("        \$%s->setValue(\$%s, %s);\n", $refName, $variableName, $this->dumpValue($value));
+            $code .= sprintf("        \$%s->%s = %s;\n", $variableName, $name, $this->dumpValue($value));
         }
 
         return $code;
@@ -818,21 +767,22 @@ EOF;
      * Exports parameters.
      *
      * @param array $parameters
+     * @param string $path
      * @param integer $indent
      * @return string
      */
-    private function exportParameters($parameters, $indent = 12)
+    private function exportParameters($parameters, $path = '', $indent = 12)
     {
         $php = array();
         foreach ($parameters as $key => $value) {
             if (is_array($value)) {
-                $value = $this->exportParameters($value, $indent + 4);
+                $value = $this->exportParameters($value, $path.'/'.$key, $indent + 4);
             } elseif ($value instanceof Variable) {
-                throw new \InvalidArgumentException(sprintf('you cannot dump a container with parameters that contain variable references. Variable "%s" found.', $value));
+                throw new \InvalidArgumentException(sprintf('You cannot dump a container with parameters that contain variable references. Variable "%s" found in "%s".', $value, $path.'/'.$key));
             } elseif ($value instanceof Definition) {
-                throw new \InvalidArgumentException(sprintf('You cannot dump a container with parameters that contain service definitions. Definition for "%s" found.', $value->getClass()));
+                throw new \InvalidArgumentException(sprintf('You cannot dump a container with parameters that contain service definitions. Definition for "%s" found in "%s".', $value->getClass(), $path.'/'.$key));
             } elseif ($value instanceof Reference) {
-                throw new \InvalidArgumentException(sprintf('You cannot dump a container with parameters that contain references to other services (reference to service %s found).', $value));
+                throw new \InvalidArgumentException(sprintf('You cannot dump a container with parameters that contain references to other services (reference to service "%s" found in "%s").', $value, $path.'/'.$key));
             } else {
                 $value = var_export($value, true);
             }
@@ -846,7 +796,7 @@ EOF;
     /**
      * Ends the class definition.
      *
-     * @return void
+     * @return string
      */
     private function endClass()
     {
@@ -883,8 +833,8 @@ EOF;
     /**
      * Builds service calls from arguments
      *
-     * @param array $arguments
-     * @param string $calls By reference
+     * @param array  $arguments
+     * @param string $calls    By reference
      * @param string $behavior By reference
      * @return void
      */
@@ -962,7 +912,7 @@ EOF;
      *
      * @param string $id
      * @param array $arguments
-     * @return boolean
+     * @return Boolean
      */
     private function hasReference($id, array $arguments)
     {
@@ -985,7 +935,7 @@ EOF;
      * Dumps values.
      *
      * @param array $value
-     * @param boolean $interpolate
+     * @param Boolean $interpolate
      * @return string
      */
     private function dumpValue($value, $interpolate = true)
@@ -1048,7 +998,7 @@ EOF;
                 $that = $this;
                 $replaceParameters = function ($match) use ($that)
                 {
-                    return sprintf("'.".$that->dumpParameter(strtolower($match[2])).".'");
+                    return "'.".$that->dumpParameter(strtolower($match[2])).".'";
                 };
 
                 $code = str_replace('%%', '%', preg_replace_callback('/(?<!%)(%)([^%]+)\1/', $replaceParameters, var_export($value, true)));
@@ -1083,7 +1033,7 @@ EOF;
     /**
      * Gets a service call
      *
-     * @param string $id
+     * @param string    $id
      * @param Reference $reference
      * @return string
      */

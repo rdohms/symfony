@@ -11,14 +11,17 @@
 
 namespace Symfony\Component\Validator\Constraints;
 
-class Callback extends \Symfony\Component\Validator\Constraint
+use Symfony\Component\Validator\Constraint;
+
+/** @Annotation */
+class Callback extends Constraint
 {
     public $methods;
 
     /**
      * {@inheritDoc}
      */
-    public function requiredOptions()
+    public function getRequiredOptions()
     {
         return array('methods');
     }
@@ -26,7 +29,7 @@ class Callback extends \Symfony\Component\Validator\Constraint
     /**
      * {@inheritDoc}
      */
-    public function defaultOption()
+    public function getDefaultOption()
     {
         return 'methods';
     }
@@ -34,7 +37,7 @@ class Callback extends \Symfony\Component\Validator\Constraint
     /**
      * {@inheritDoc}
      */
-    public function targets()
+    public function getTargets()
     {
         return self::CLASS_CONSTRAINT;
     }

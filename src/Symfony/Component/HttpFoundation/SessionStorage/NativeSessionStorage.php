@@ -26,8 +26,8 @@ class NativeSessionStorage implements SessionStorageInterface
     /**
      * Available options:
      *
-     *  * name:     The cookie name (_SESS by default)
-     *  * id:       The session id (null by default)
+     *  * name:     The cookie name (null [ommited] by default)
+     *  * id:       The session id (null [ommited] by default)
      *  * lifetime: Cookie lifetime
      *  * path:     Cookie path
      *  * domain:   Cookie domain
@@ -36,22 +36,24 @@ class NativeSessionStorage implements SessionStorageInterface
      *
      * The default values for most options are those returned by the session_get_cookie_params() function
      *
-     * @param array $options  An associative array of options
+     * @param array $options  An associative array of session options
      */
     public function __construct(array $options = array())
     {
         $cookieDefaults = session_get_cookie_params();
 
         $this->options = array_merge(array(
-            'name'          => '_SESS',
-            'lifetime'      => $cookieDefaults['lifetime'],
-            'path'          => $cookieDefaults['path'],
-            'domain'        => $cookieDefaults['domain'],
-            'secure'        => $cookieDefaults['secure'],
-            'httponly'      => isset($cookieDefaults['httponly']) ? $cookieDefaults['httponly'] : false,
+            'lifetime' => $cookieDefaults['lifetime'],
+            'path'     => $cookieDefaults['path'],
+            'domain'   => $cookieDefaults['domain'],
+            'secure'   => $cookieDefaults['secure'],
+            'httponly' => isset($cookieDefaults['httponly']) ? $cookieDefaults['httponly'] : false,
         ), $options);
 
-        session_name($this->options['name']);
+        // Skip setting new session name if user don't want it
+        if (isset($this->options['name'])) {
+            session_name($this->options['name']);
+        }
     }
 
     /**
@@ -74,7 +76,7 @@ class NativeSessionStorage implements SessionStorageInterface
         // disable native cache limiter as this is managed by HeaderBag directly
         session_cache_limiter(false);
 
-        if (!ini_get('session.use_cookies') && $this->options['id'] && $this->options['id'] != session_id()) {
+        if (!ini_get('session.use_cookies') && isset($this->options['id']) && $this->options['id'] && $this->options['id'] != session_id()) {
             session_id($this->options['id']);
         }
 
@@ -84,7 +86,7 @@ class NativeSessionStorage implements SessionStorageInterface
     }
 
     /**
-     * @inheritDoc
+     * {@inheritDoc}
      */
     public function getId()
     {
@@ -100,7 +102,8 @@ class NativeSessionStorage implements SessionStorageInterface
      *
      * The preferred format for a key is directory style so naming conflicts can be avoided.
      *
-     * @param string $key A unique key identifying your data
+     * @param string $key     A unique key identifying your data
+     * @param string $default Default value
      *
      * @return mixed Data associated with the key
      */

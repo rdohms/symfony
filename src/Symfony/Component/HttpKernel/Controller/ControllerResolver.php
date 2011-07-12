@@ -54,13 +54,13 @@ class ControllerResolver implements ControllerResolverInterface
     {
         if (!$controller = $request->attributes->get('_controller')) {
             if (null !== $this->logger) {
-                $this->logger->err('Unable to look for the controller as the "_controller" parameter is missing');
+                $this->logger->warn('Unable to look for the controller as the "_controller" parameter is missing');
             }
 
             return false;
         }
 
-        if ($controller instanceof \Closure) {
+        if (is_array($controller) || ((is_object($controller) || false === strpos($controller, ':')) && method_exists($controller, '__invoke'))) {
             return $controller;
         }
 
@@ -68,10 +68,6 @@ class ControllerResolver implements ControllerResolverInterface
 
         if (!method_exists($controller, $method)) {
             throw new \InvalidArgumentException(sprintf('Method "%s::%s" does not exist.', get_class($controller), $method));
-        }
-
-        if (null !== $this->logger) {
-            $this->logger->info(sprintf('Using controller "%s::%s"', get_class($controller), $method));
         }
 
         return array($controller, $method);
@@ -92,15 +88,21 @@ class ControllerResolver implements ControllerResolverInterface
         if (is_array($controller)) {
             $r = new \ReflectionMethod($controller[0], $controller[1]);
             $repr = sprintf('%s::%s()', get_class($controller[0]), $controller[1]);
+        } elseif (is_object($controller)) {
+            $r = new \ReflectionObject($controller);
+            $r = $r->getMethod('__invoke');
+            $repr = get_class($controller);
         } else {
             $r = new \ReflectionFunction($controller);
-            $repr = 'Closure';
+            $repr = $controller;
         }
 
         $arguments = array();
         foreach ($r->getParameters() as $param) {
             if (array_key_exists($param->getName(), $attributes)) {
                 $arguments[] = $attributes[$param->getName()];
+            } elseif ($param->getClass() && $param->getClass()->isInstance($request)) {
+                $arguments[] = $request;
             } elseif ($param->isDefaultValueAvailable()) {
                 $arguments[] = $param->getDefaultValue();
             } else {

@@ -46,7 +46,7 @@ class Process
      *
      * @api
      */
-    public function __construct($commandline, $cwd = null, array $env = array(), $stdin = null, $timeout = 60, array $options = array())
+    public function __construct($commandline, $cwd = null, array $env = null, $stdin = null, $timeout = 60, array $options = array())
     {
         if (!function_exists('proc_open')) {
             throw new \RuntimeException('The Process class relies on proc_open, which is not available on your PHP installation.');
@@ -54,13 +54,17 @@ class Process
 
         $this->commandline = $commandline;
         $this->cwd = null === $cwd ? getcwd() : $cwd;
-        $this->env = array();
-        foreach ($env as $key => $value) {
-            $this->env[(binary) $key] = (binary) $value;
+        if (null !== $env) {
+            $this->env = array();
+            foreach ($env as $key => $value) {
+                $this->env[(binary) $key] = (binary) $value;
+            }
+        } else {
+            $this->env = null;
         }
         $this->stdin = $stdin;
         $this->timeout = $timeout;
-        $this->options = array_merge($options, array('suppress_errors' => true, 'binary_pipes' => true));
+        $this->options = array_merge(array('suppress_errors' => true, 'binary_pipes' => true, 'bypass_shell' => false), $options);
     }
 
     /**
@@ -70,8 +74,8 @@ class Process
      * some bytes from the output in real-time. It allows to have feedback
      * from the independent process during execution.
      *
-     * If you don't provide a callback, the STDOUT and STDERR are available only after
-     * the process is finished via the getOutput() and getErrorOutput() methods.
+     * The STDOUT and STDERR are also available after the process is finished
+     * via the getOutput() and getErrorOutput() methods.
      *
      * @param Closure|string|array $callback A PHP callback to run whenever there is some
      *                                       output available on STDOUT or STDERR
@@ -84,39 +88,47 @@ class Process
      */
     public function run($callback = null)
     {
-        if (null === $callback) {
-            $this->stdout = '';
-            $this->stderr = '';
-            $that = $this;
-            $callback = function ($type, $line) use ($that)
-            {
-                if ('out' == $type) {
-                    $that->addOutput($line);
-                } else {
-                    $that->addErrorOutput($line);
-                }
-            };
-        }
+        $this->stdout = '';
+        $this->stderr = '';
+        $that = $this;
+        $callback = function ($type, $data) use ($that, $callback)
+        {
+            if ('out' == $type) {
+                $that->addOutput($data);
+            } else {
+                $that->addErrorOutput($data);
+            }
+
+            if (null !== $callback) {
+                call_user_func($callback, $type, $data);
+            }
+        };
 
         $descriptors = array(array('pipe', 'r'), array('pipe', 'w'), array('pipe', 'w'));
 
         $process = proc_open($this->commandline, $descriptors, $pipes, $this->cwd, $this->env, $this->options);
 
-        stream_set_blocking($pipes[1], false);
-        stream_set_blocking($pipes[2], false);
-
         if (!is_resource($process)) {
             throw new \RuntimeException('Unable to launch a new process.');
         }
 
-        if (null !== $this->stdin) {
-            fwrite($pipes[0], (binary) $this->stdin);
+        foreach ($pipes as $pipe) {
+            stream_set_blocking($pipe, false);
         }
-        fclose($pipes[0]);
 
-        while (true) {
+        if (null === $this->stdin) {
+            fclose($pipes[0]);
+            $writePipes = null;
+        } else {
+            $writePipes = array($pipes[0]);
+            $stdinLen = strlen($this->stdin);
+            $stdinOffset = 0;
+        }
+        unset($pipes[0]);
+
+        while ($pipes || $writePipes) {
             $r = $pipes;
-            $w = null;
+            $w = $writePipes;
             $e = null;
 
             $n = @stream_select($r, $w, $e, $this->timeout);
@@ -127,41 +139,48 @@ class Process
                 proc_terminate($process);
 
                 throw new \RuntimeException('The process timed out.');
-            } elseif ($n > 0) {
-                $called = false;
+            }
 
-                while (true) {
-                    $c = false;
-                    if ($line = (binary) fgets($pipes[1], 1024)) {
-                        $called = $c = true;
-                        call_user_func($callback, 'out', $line);
-                    }
-
-                    if ($line = fgets($pipes[2], 1024)) {
-                        $called = $c = true;
-                        call_user_func($callback, 'err', $line);
-                    }
-
-                    if (!$c) {
-                        break;
-                    }
+            if ($w) {
+                $written = fwrite($writePipes[0], (binary) substr($this->stdin, $stdinOffset), 8192);
+                if (false !== $written) {
+                    $stdinOffset += $written;
                 }
+                if ($stdinOffset >= $stdinLen) {
+                    fclose($writePipes[0]);
+                    $writePipes = null;
+                }
+            }
 
-                if (!$called) {
-                    break;
+            foreach ($r as $pipe) {
+                $type = array_search($pipe, $pipes);
+                $data = fread($pipe, 8192);
+                if (strlen($data) > 0) {
+                    call_user_func($callback, $type == 1 ? 'out' : 'err', $data);
+                }
+                if (false === $data || feof($pipe)) {
+                    fclose($pipe);
+                    unset($pipes[$type]);
                 }
             }
         }
 
         $this->status = proc_get_status($process);
 
-        proc_close($process);
+        $time = 0;
+        while (1 == $this->status['running'] && $time < 1000000) {
+            $time += 1000;
+            usleep(1000);
+            $this->status = proc_get_status($process);
+        }
+
+        $exitcode = proc_close($process);
 
         if ($this->status['signaled']) {
             throw new \RuntimeException(sprintf('The process stopped because of a "%s" signal.', $this->status['stopsig']));
         }
 
-        return $this->exitcode = $this->status['exitcode'];
+        return $this->exitcode = $this->status['running'] ? $exitcode : $this->status['exitcode'];
     }
 
     /**
@@ -292,5 +311,55 @@ class Process
     public function setCommandLine($commandline)
     {
         $this->commandline = $commandline;
+    }
+
+    public function getTimeout()
+    {
+        return $this->timeout;
+    }
+
+    public function setTimeout($timeout)
+    {
+        $this->timeout = $timeout;
+    }
+
+    public function getWorkingDirectory()
+    {
+        return $this->cwd;
+    }
+
+    public function setWorkingDirectory($cwd)
+    {
+        $this->cwd = $cwd;
+    }
+
+    public function getEnv()
+    {
+        return $this->env;
+    }
+
+    public function setEnv(array $env)
+    {
+        $this->env = $env;
+    }
+
+    public function getStdin()
+    {
+        return $this->stdin;
+    }
+
+    public function setStdin($stdin)
+    {
+        $this->stdin = $stdin;
+    }
+
+    public function getOptions()
+    {
+        return $this->options;
+    }
+
+    public function setOptions(array $options)
+    {
+        $this->options = $options;
     }
 }

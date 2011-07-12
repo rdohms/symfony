@@ -27,6 +27,7 @@ abstract class Bundle extends ContainerAware implements BundleInterface
 {
     protected $name;
     protected $reflected;
+    protected $extension;
 
     /**
      * Boots the Bundle.
@@ -47,13 +48,6 @@ abstract class Bundle extends ContainerAware implements BundleInterface
      *
      * It is only ever called once when the cache is empty.
      *
-     * The default implementation automatically registers a DIC extension
-     * if its name is the same as the bundle name after replacing the
-     * Bundle suffix by Extension (DependencyInjection\SensioBlogExtension
-     * for a SensioBlogBundle for instance). In such a case, the alias
-     * is forced to be the underscore version of the bundle name
-     * (sensio_blog for a SensioBlogBundle for instance).
-     *
      * This method can be overridden to register compilation passes,
      * other extensions, ...
      *
@@ -61,15 +55,41 @@ abstract class Bundle extends ContainerAware implements BundleInterface
      */
     public function build(ContainerBuilder $container)
     {
-        $class = $this->getNamespace().'\\DependencyInjection\\'.$this->getName().'Extension';
-        if (class_exists($class)) {
-            $extension = new $class();
-            $alias = Container::underscore($this->getName());
-            if ($alias !== $extension->getAlias()) {
-                throw new \LogicException(sprintf('The extension alias for the default extension of a bundle must be the underscored version of the bundle name ("%s" vs "%s")', $alias, $extension->getAlias()));
-            }
+    }
 
-            $container->registerExtension($extension);
+    /**
+     * Returns the bundle's container extension.
+     *
+     * @return ExtensionInterface|null The container extension
+     */
+    public function getContainerExtension()
+    {
+        if (null === $this->extension) {
+            $basename = preg_replace('/Bundle$/', '', $this->getName());
+
+            $class = $this->getNamespace().'\\DependencyInjection\\'.$basename.'Extension';
+            if (class_exists($class)) {
+                $extension = new $class();
+
+                // check naming convention
+                $expectedAlias = Container::underscore($basename);
+                if ($expectedAlias != $extension->getAlias()) {
+                    throw new \LogicException(sprintf(
+                        'The extension alias for the default extension of a '.
+                        'bundle must be the underscored version of the '.
+                        'bundle name ("%s" vs "%s")',
+                        $expectedAlias, $extension->getAlias()
+                    ));
+                }
+
+                $this->extension = $extension;
+            } else {
+                $this->extension = false;
+            }
+        }
+
+        if ($this->extension) {
+            return $this->extension;
         }
     }
 
@@ -98,7 +118,7 @@ abstract class Bundle extends ContainerAware implements BundleInterface
             $this->reflected = new \ReflectionObject($this);
         }
 
-        return strtr(dirname($this->reflected->getFileName()), '\\', '/');
+        return dirname($this->reflected->getFileName());
     }
 
     /**
@@ -115,8 +135,6 @@ abstract class Bundle extends ContainerAware implements BundleInterface
      * Returns the bundle name (the class short name).
      *
      * @return string The Bundle name
-     *
-     * @throws RuntimeException If the bundle class name does not end with "Bundle"
      */
     final public function getName()
     {
@@ -124,14 +142,10 @@ abstract class Bundle extends ContainerAware implements BundleInterface
             return $this->name;
         }
 
-        $fqcn = get_class($this);
-        $name = false === ($pos = strrpos($fqcn, '\\')) ? $fqcn : substr($fqcn, $pos + 1);
+        $name = get_class($this);
+        $pos = strrpos($name, '\\');
 
-        if ('Bundle' != substr($name, -6)) {
-            throw new \RuntimeException(sprintf('The bundle class name "%s" must end with "Bundle" to be valid.', $name));
-        }
-
-        return $this->name = substr($name, 0, -6);
+        return $this->name = false === $pos ? $name :  substr($name, $pos + 1);
     }
 
     /**

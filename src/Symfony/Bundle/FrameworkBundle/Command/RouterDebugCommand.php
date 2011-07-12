@@ -23,7 +23,7 @@ use Symfony\Component\Routing\Matcher\Dumper\ApacheMatcherDumper;
  *
  * @author Fabien Potencier <fabien@symfony.com>
  */
-class RouterDebugCommand extends Command
+class RouterDebugCommand extends ContainerAwareCommand
 {
     /**
      * @see Command
@@ -50,7 +50,7 @@ EOF
      */
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        $router = $this->container->get('router');
+        $router = $this->getContainer()->get('router');
 
         $routes = array();
         foreach ($router->getRouteCollection()->all() as $name => $route) {
@@ -134,31 +134,17 @@ EOF
         }
         $output->writeln(sprintf('<comment>Options</comment>      %s', $options));
         $output->write('<comment>Regex</comment>        ');
-        $output->writeln(preg_replace('/^             /', '', preg_replace('/^/m', '             ', $route->getRegex())), Output::OUTPUT_RAW);
-
-        $tokens = '';
-        foreach ($route->getTokens() as $token) {
-            if (!$tokens) {
-                $tokens = $this->displayToken($token);
-            } else {
-                $tokens .= "\n".str_repeat(' ', 13).$this->displayToken($token);
-            }
-        }
-        $output->writeln(sprintf('<comment>Tokens</comment>       %s', $tokens));
-    }
-
-    protected function displayToken($token)
-    {
-        $type = array_shift($token);
-        array_shift($token);
-
-        return sprintf('%-10s %s', $type, $this->formatValue($token));
+        $output->writeln(preg_replace('/^             /', '', preg_replace('/^/m', '             ', $route->getRegex())), OutputInterface::OUTPUT_RAW);
     }
 
     protected function formatValue($value)
     {
         if (is_object($value)) {
             return sprintf('object(%s)', get_class($value));
+        }
+
+        if (is_string($value)) {
+            return $value;
         }
 
         return preg_replace("/\n\s*/s", '', var_export($value, true));

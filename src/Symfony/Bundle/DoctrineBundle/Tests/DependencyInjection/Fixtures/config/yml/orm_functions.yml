@@ -1,10 +1,15 @@
 doctrine:
-    dbal: ~
+    dbal:
+        default_connection: default
+        connections:
+            default:
+                dbname: db
+
     orm:
         entity_managers:
             default:
                 mappings:
-                    Yaml: ~
+                    YamlBundle: ~
                 dql:
                     string_functions:
                         test_string: Symfony\Bundle\DoctrineBundle\Tests\DependencyInjection\TestStringFunction

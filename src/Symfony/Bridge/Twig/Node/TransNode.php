@@ -12,13 +12,13 @@
 namespace Symfony\Bridge\Twig\Node;
 
 /**
- * 
+ *
  *
  * @author Fabien Potencier <fabien@symfony.com>
  */
 class TransNode extends \Twig_Node
 {
-    public function __construct(\Twig_NodeInterface $body, \Twig_NodeInterface $domain, \Twig_Node_Expression $count = null, \Twig_Node_Expression $vars = null, $lineno, $tag = null)
+    public function __construct(\Twig_NodeInterface $body, \Twig_NodeInterface $domain, \Twig_Node_Expression $count = null, \Twig_Node_Expression $vars = null, $lineno = 0, $tag = null)
     {
         parent::__construct(array('count' => $count, 'body' => $body, 'domain' => $domain, 'vars' => $vars), array(), $lineno, $tag);
     }
@@ -26,7 +26,7 @@ class TransNode extends \Twig_Node
     /**
      * Compiles the node to PHP.
      *
-     * @param \Twig_Compiler A Twig_Compiler instance
+     * @param \Twig_Compiler $compiler A Twig_Compiler instance
      */
     public function compile(\Twig_Compiler $compiler)
     {
@@ -38,7 +38,6 @@ class TransNode extends \Twig_Node
             $defaults = $this->getNode('vars');
             $vars = null;
         }
-
         list($msg, $defaults) = $this->compileString($this->getNode('body'), $defaults);
 
         $method = null === $this->getNode('count') ? 'trans' : 'transChoice';
@@ -105,13 +104,13 @@ class TransNode extends \Twig_Node
             $current[$name] = true;
         }
 
-        preg_match_all('/\%([^\%]+)\%/', $msg, $matches);
+        preg_match_all('/(?<!%)%([^%]+)%/', $msg, $matches);
         foreach ($matches[1] as $var) {
             if (!isset($current['%'.$var.'%'])) {
                 $vars->setNode('%'.$var.'%', new \Twig_Node_Expression_Name($var, $body->getLine()));
             }
         }
 
-        return array(new \Twig_Node_Expression_Constant(trim($msg), $body->getLine()), $vars);
+        return array(new \Twig_Node_Expression_Constant(str_replace('%%', '%', trim($msg)), $body->getLine()), $vars);
     }
 }

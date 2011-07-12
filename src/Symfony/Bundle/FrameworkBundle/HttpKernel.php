@@ -1,5 +1,14 @@
 <?php
 
+/*
+ * This file is part of the Symfony framework.
+ *
+ * (c) Fabien Potencier <fabien@symfony.com>
+ *
+ * This source file is subject to the MIT license that is bundled
+ * with this source code in the file LICENSE.
+ */
+
 namespace Symfony\Bundle\FrameworkBundle;
 
 use Symfony\Component\HttpFoundation\Request;
@@ -47,7 +56,7 @@ class HttpKernel extends BaseHttpKernel
     /**
      * Forwards the request to another controller.
      *
-     * @param  string  $controller The controller name (a string like Blog:Post:index)
+     * @param  string  $controller The controller name (a string like BlogBundle:Post:index)
      * @param  array   $attributes An array of request attributes
      * @param  array   $query      An array of request query parameters
      *
@@ -76,7 +85,7 @@ class HttpKernel extends BaseHttpKernel
      *  * standalone: whether to generate an esi:include tag or not when ESI is supported
      *  * comment: a comment to add when returning an esi:include tag
      *
-     * @param string $controller A controller name to execute (a string like Blog:Post:index), or a relative URI
+     * @param string $controller A controller name to execute (a string like BlogBundle:Post:index), or a relative URI
      * @param array  $options    An array of options
      *
      * @return string The Response content
@@ -120,6 +129,7 @@ class HttpKernel extends BaseHttpKernel
         } else {
             $options['attributes']['_controller'] = $controller;
             $options['attributes']['_format'] = $request->getRequestFormat();
+            $options['attributes']['_route'] = '_internal';
             $subRequest = $request->duplicate($options['query'], null, $options['attributes']);
         }
 
@@ -152,7 +162,7 @@ class HttpKernel extends BaseHttpKernel
      *
      * This method uses the "_internal" route, which should be available.
      *
-     * @param string $controller A controller name to execute (a string like Blog:Post:index), or a relative URI
+     * @param string $controller A controller name to execute (a string like BlogBundle:Post:index), or a relative URI
      * @param array  $attributes An array of request attributes
      * @param array  $query      An array of request query parameters
      *
@@ -168,7 +178,7 @@ class HttpKernel extends BaseHttpKernel
             'controller' => $controller,
             'path'       => $attributes ? http_build_query($attributes) : 'none',
             '_format'    => $this->container->get('request')->getRequestFormat(),
-        ), true);
+        ));
 
         if ($query) {
             $uri = $uri.'?'.http_build_query($query);

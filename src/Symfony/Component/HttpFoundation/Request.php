@@ -12,7 +12,6 @@
 namespace Symfony\Component\HttpFoundation;
 
 use Symfony\Component\HttpFoundation\SessionStorage\NativeSessionStorage;
-use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
  * Request represents an HTTP request.
@@ -21,6 +20,8 @@ use Symfony\Component\HttpFoundation\File\UploadedFile;
  */
 class Request
 {
+    static protected $trustProxy = false;
+
     /**
      * @var \Symfony\Component\HttpFoundation\ParameterBag
      */
@@ -126,9 +127,18 @@ class Request
      *
      * @return Request A new request
      */
-    static public function createfromGlobals()
+    static public function createFromGlobals()
     {
-        return new static($_GET, $_POST, array(), $_COOKIE, $_FILES, $_SERVER);
+        $request = new static($_GET, $_POST, array(), $_COOKIE, $_FILES, $_SERVER);
+
+        if (0 === strpos($request->server->get('CONTENT_TYPE'), 'application/x-www-form-urlencoded')
+            && in_array(strtoupper($request->server->get('REQUEST_METHOD', 'GET')), array('PUT', 'DELETE'))
+        ) {
+            parse_str($request->getContent(), $data);
+            $request->request = new ParameterBag($data);
+        }
+
+        return $request;
     }
 
     /**
@@ -157,6 +167,8 @@ class Request
             'REMOTE_ADDR'          => '127.0.0.1',
             'SCRIPT_NAME'          => '',
             'SCRIPT_FILENAME'      => '',
+            'SERVER_PROTOCOL'      => 'HTTP/1.1',
+            'REQUEST_TIME'         => time(),
         );
 
         $components = parse_url($uri);
@@ -198,7 +210,7 @@ class Request
             $query = array_replace($qs, $query);
         }
 
-        $uri = $components['path'] . ($queryString ? '?'.$queryString : '');
+        $uri = $components['path'].($queryString ? '?'.$queryString : '');
 
         $server = array_replace($defaults, $server, array(
             'REQUEST_METHOD'       => strtoupper($method),
@@ -224,23 +236,23 @@ class Request
     {
         $dup = clone $this;
         if ($query !== null) {
-          $dup->query = new ParameterBag($query);
+            $dup->query = new ParameterBag($query);
         }
         if ($request !== null) {
-          $dup->request = new ParameterBag($request);
+            $dup->request = new ParameterBag($request);
         }
         if ($attributes !== null) {
-          $dup->attributes = new ParameterBag($attributes);
+            $dup->attributes = new ParameterBag($attributes);
         }
         if ($cookies !== null) {
-          $dup->cookies = new ParameterBag($cookies);
+            $dup->cookies = new ParameterBag($cookies);
         }
         if ($files !== null) {
-          $dup->files = new FileBag($files);
+            $dup->files = new FileBag($files);
         }
         if ($server !== null) {
-          $dup->server = new ServerBag($server);
-          $dup->headers = new HeaderBag($dup->server->getHeaders());
+            $dup->server = new ServerBag($server);
+            $dup->headers = new HeaderBag($dup->server->getHeaders());
         }
         $this->languages = null;
         $this->charsets = null;
@@ -273,6 +285,19 @@ class Request
     }
 
     /**
+     * Returns the request as a string.
+     *
+     * @return string The request
+     */
+    public function __toString()
+    {
+        return
+            sprintf('%s %s %s', $this->getMethod(), $this->getRequestUri(), $this->server->get('SERVER_PROTOCOL'))."\r\n".
+            $this->headers."\r\n".
+            $this->getContent();
+    }
+
+    /**
      * Overrides the PHP global variables according to this request instance.
      *
      * It overrides $_GET, $_POST, $_REQUEST, $_SERVER, $_COOKIE, and $_FILES.
@@ -286,7 +311,12 @@ class Request
         // FIXME: populate $_FILES
 
         foreach ($this->headers->all() as $key => $value) {
-            $_SERVER['HTTP_'.strtoupper(str_replace('-', '_', $key))] = implode(', ', $value);
+            $key = strtoupper(str_replace('-', '_', $key));
+            if (in_array($key, array('CONTENT_TYPE', 'CONTENT_LENGTH'))) {
+                $_SERVER[$key] = implode(', ', $value);
+            } else {
+                $_SERVER['HTTP_'.$key] = implode(', ', $value);
+            }
         }
 
         // FIXME: should read variables_order and request_order
@@ -294,26 +324,75 @@ class Request
         $_REQUEST = array_merge($_GET, $_POST);
     }
 
-    // Order of precedence: GET, PATH, POST, COOKIE
-    // Avoid using this method in controllers:
-    //  * slow
-    //  * prefer to get from a "named" source
-    // This method is mainly useful for libraries that want to provide some flexibility
-    public function get($key, $default = null)
+    /**
+     * Trusts $_SERVER entries coming from proxies.
+     *
+     * You should only call this method if your application
+     * is hosted behind a reverse proxy that you manage.
+     */
+    static public function trustProxyData()
     {
-        return $this->query->get($key, $this->attributes->get($key, $this->request->get($key, $default)));
+        self::$trustProxy = true;
     }
 
+    /**
+     * Gets a "parameter" value.
+     *
+     * This method is mainly useful for libraries that want to provide some flexibility.
+     *
+     * Order of precedence: GET, PATH, POST, COOKIE
+     * Avoid using this method in controllers:
+     *  * slow
+     *  * prefer to get from a "named" source
+     *
+     * @param string    $key        the key
+     * @param mixed     $default    the default value
+     * @param type      $deep       is parameter deep in multidimensional array
+     *
+     * @return mixed
+     */
+    public function get($key, $default = null, $deep = false)
+    {
+        return $this->query->get($key, $this->attributes->get($key, $this->request->get($key, $default, $deep), $deep), $deep);
+    }
+
+    /**
+     * Gets the Session.
+     *
+     * @return Session|null The session
+     */
     public function getSession()
     {
         return $this->session;
     }
 
-    public function hasSession()
+    /**
+     * Whether the request contains a Session which was started in one of the
+     * previous requests.
+     *
+     * @return boolean
+     */
+    public function hasPreviousSession()
     {
-        return $this->cookies->has(session_name());
+        // the check for $this->session avoids malicious users trying to fake a session cookie with proper name
+        return $this->cookies->has(session_name()) && null !== $this->session;
     }
 
+    /**
+     * Whether the request contains a Session object.
+     *
+     * @return boolean
+     */
+    public function hasSession()
+    {
+        return null !== $this->session;
+    }
+
+    /**
+     * Sets the Session.
+     *
+     * @param Session $session The Session
+     */
     public function setSession(Session $session)
     {
         $this->session = $session;
@@ -331,7 +410,7 @@ class Request
         if ($proxy) {
             if ($this->server->has('HTTP_CLIENT_IP')) {
                 return $this->server->get('HTTP_CLIENT_IP');
-            } elseif ($this->server->has('HTTP_X_FORWARDED_FOR')) {
+            } elseif (self::$trustProxy && $this->server->has('HTTP_X_FORWARDED_FOR')) {
                 return $this->server->get('HTTP_X_FORWARDED_FOR');
             }
         }
@@ -351,6 +430,8 @@ class Request
 
     /**
      * Returns the path being requested relative to the executed script.
+     *
+     * The path info always starts with a /.
      *
      * Suppose this request is instantiated from /mysite on localhost:
      *
@@ -392,6 +473,8 @@ class Request
     /**
      * Returns the root url from which this request is executed.
      *
+     * The base URL never ends with a /.
+     *
      * This is similar to getBasePath(), except that it also includes the
      * script filename (e.g. index.php) if one exists.
      *
@@ -406,14 +489,24 @@ class Request
         return $this->baseUrl;
     }
 
+    /**
+     * Gets the request's scheme.
+     *
+     * @return string
+     */
     public function getScheme()
     {
-        return ($this->server->get('HTTPS') == 'on') ? 'https' : 'http';
+        return $this->isSecure() ? 'https' : 'http';
     }
 
+    /**
+     * Returns the port on which the request is made.
+     *
+     * @return string
+     */
     public function getPort()
     {
-        return $this->server->get('SERVER_PORT');
+        return $this->headers->get('X-Forwarded-Port') ?: $this->server->get('SERVER_PORT');
     }
 
     /**
@@ -425,22 +518,21 @@ class Request
      */
     public function getHttpHost()
     {
-        $host = $this->headers->get('HOST');
-        if (!empty($host)) {
-            return $host;
-        }
-
         $scheme = $this->getScheme();
-        $name   = $this->server->get('SERVER_NAME');
         $port   = $this->getPort();
 
         if (('http' == $scheme && $port == 80) || ('https' == $scheme && $port == 443)) {
-            return $name;
+            return $this->getHost();
         }
 
-        return $name.':'.$port;
+        return $this->getHost().':'.$port;
     }
 
+    /**
+     * Returns the requested URI.
+     *
+     * @return string
+     */
     public function getRequestUri()
     {
         if (null === $this->requestUri) {
@@ -501,8 +593,8 @@ class Request
                 $parts[] = $segment;
                 $order[] = $segment;
             } else {
-                $tmp = explode('=', urldecode($segment), 2);
-                $parts[] = urlencode($tmp[0]).'='.urlencode($tmp[1]);
+                $tmp = explode('=', rawurldecode($segment), 2);
+                $parts[] = rawurlencode($tmp[0]).'='.rawurlencode($tmp[1]);
                 $order[] = $tmp[0];
             }
         }
@@ -511,14 +603,19 @@ class Request
         return implode('&', $parts);
     }
 
+    /**
+     * Checks whether the request is secure or not.
+     *
+     * @return Boolean
+     */
     public function isSecure()
     {
         return (
             (strtolower($this->server->get('HTTPS')) == 'on' || $this->server->get('HTTPS') == 1)
             ||
-            (strtolower($this->headers->get('SSL_HTTPS')) == 'on' || $this->headers->get('SSL_HTTPS') == 1)
+            (self::$trustProxy && strtolower($this->headers->get('SSL_HTTPS')) == 'on' || $this->headers->get('SSL_HTTPS') == 1)
             ||
-            (strtolower($this->headers->get('X_FORWARDED_PROTO')) == 'https')
+            (self::$trustProxy && strtolower($this->headers->get('X_FORWARDED_PROTO')) == 'https')
         );
     }
 
@@ -529,7 +626,7 @@ class Request
      */
     public function getHost()
     {
-        if ($host = $this->headers->get('X_FORWARDED_HOST')) {
+        if (self::$trustProxy && $host = $this->headers->get('X_FORWARDED_HOST')) {
             $elements = explode(',', $host);
 
             $host = trim($elements[count($elements) - 1]);
@@ -542,11 +639,16 @@ class Request
         }
 
         // Remove port number from host
-        $elements = explode(':', $host);
+        $host = preg_replace('/:\d+$/', '', $host);
 
-        return trim($elements[0]);
+        return trim($host);
     }
 
+    /**
+     * Sets the request method.
+     *
+     * @param string $method
+     */
     public function setMethod($method)
     {
         $this->method = null;
@@ -556,6 +658,8 @@ class Request
     /**
      * Gets the request method.
      *
+     * The method is always an uppercased string.
+     *
      * @return string The request method
      */
     public function getMethod()
@@ -563,7 +667,7 @@ class Request
         if (null === $this->method) {
             $this->method = strtoupper($this->server->get('REQUEST_METHOD', 'GET'));
             if ('POST' === $this->method) {
-                $this->method = strtoupper($this->request->get('_method', 'POST'));
+                $this->method = strtoupper($this->server->get('X-HTTP-METHOD-OVERRIDE', $this->request->get('_method', 'POST')));
             }
         }
 
@@ -595,6 +699,10 @@ class Request
      */
     public function getFormat($mimeType)
     {
+        if (false !== $pos = strpos($mimeType, ';')) {
+            $mimeType = substr($mimeType, 0, $pos);
+        }
+
         if (null === static::$formats) {
             static::initializeFormats();
         }
@@ -630,14 +738,16 @@ class Request
      *
      *  * format defined by the user (with setRequestFormat())
      *  * _format request parameter
-     *  * null
+     *  * $default
+     *
+     * @param string  $default     The default format
      *
      * @return string The request format
      */
-    public function getRequestFormat()
+    public function getRequestFormat($default = 'html')
     {
         if (null === $this->format) {
-            $this->format = $this->get('_format', 'html');
+            $this->format = $this->get('_format', $default);
         }
 
         return $this->format;
@@ -648,6 +758,11 @@ class Request
         $this->format = $format;
     }
 
+    /**
+     * Checks whether the method is safe or not.
+     *
+     * @return Boolean
+     */
     public function isMethodSafe()
     {
         return in_array($this->getMethod(), array('GET', 'HEAD'));
@@ -679,6 +794,11 @@ class Request
         return $this->content;
     }
 
+    /**
+     * Gets the Etags.
+     *
+     * @return array The entity tags
+     */
     public function getETags()
     {
         return preg_split('/\s*,\s*/', $this->headers->get('if_none_match'), null, PREG_SPLIT_NO_EMPTY);
@@ -726,7 +846,7 @@ class Request
 
         $languages = $this->splitHttpAcceptHeader($this->headers->get('Accept-Language'));
         $this->languages = array();
-        foreach ($languages as $lang) {
+        foreach ($languages as $lang => $q) {
             if (strstr($lang, '-')) {
                 $codes = explode('-', $lang);
                 if ($codes[0] == 'i') {
@@ -764,13 +884,13 @@ class Request
             return $this->charsets;
         }
 
-        return $this->charsets = $this->splitHttpAcceptHeader($this->headers->get('Accept-Charset'));
+        return $this->charsets = array_keys($this->splitHttpAcceptHeader($this->headers->get('Accept-Charset')));
     }
 
     /**
      * Gets a list of content types acceptable by the client browser
      *
-     * @return array Languages ordered in the user browser preferences
+     * @return array List of content types in preferable order
      */
     public function getAcceptableContentTypes()
     {
@@ -778,7 +898,7 @@ class Request
             return $this->acceptableContentTypes;
         }
 
-        return $this->acceptableContentTypes = $this->splitHttpAcceptHeader($this->headers->get('Accept'));
+        return $this->acceptableContentTypes = array_keys($this->splitHttpAcceptHeader($this->headers->get('Accept')));
     }
 
     /**
@@ -821,8 +941,9 @@ class Request
         }
 
         arsort($values);
+        reset($values);
 
-        return array_keys($values);
+        return $values;
     }
 
     /*
@@ -922,6 +1043,11 @@ class Request
         return rtrim($baseUrl, '/');
     }
 
+    /**
+     * Prepares base path.
+     *
+     * @return string base path
+     */
     protected function prepareBasePath()
     {
         $filename = basename($this->server->get('SCRIPT_FILENAME'));
@@ -943,15 +1069,20 @@ class Request
         return rtrim($basePath, '/');
     }
 
+    /**
+     * Prepares path info.
+     *
+     * @return string path info
+     */
     protected function preparePathInfo()
     {
         $baseUrl = $this->getBaseUrl();
 
         if (null === ($requestUri = $this->getRequestUri())) {
-            return '';
+            return '/';
         }
 
-        $pathInfo = '';
+        $pathInfo = '/';
 
         // Remove the query string from REQUEST_URI
         if ($pos = strpos($requestUri, '?')) {
@@ -960,7 +1091,7 @@ class Request
 
         if ((null !== $baseUrl) && (false === ($pathInfo = substr($requestUri, strlen($baseUrl))))) {
             // If substr() returns false then PATH_INFO is set to an empty string
-            return '';
+            return '/';
         } elseif (null === $baseUrl) {
             return $requestUri;
         }
@@ -968,9 +1099,13 @@ class Request
         return (string) $pathInfo;
     }
 
+    /**
+     * Initializes HTTP request formats.
+     */
     static protected function initializeFormats()
     {
         static::$formats = array(
+            'html' => array('text/html', 'application/xhtml+xml'),
             'txt'  => array('text/plain'),
             'js'   => array('application/javascript', 'application/x-javascript', 'text/javascript'),
             'css'  => array('text/css'),

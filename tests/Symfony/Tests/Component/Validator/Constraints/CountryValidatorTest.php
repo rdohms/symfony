@@ -9,7 +9,7 @@
  * file that was distributed with this source code.
  */
 
-namespace Symfony\Tests\Component\Validator;
+namespace Symfony\Tests\Component\Validator\Constraints;
 
 use Symfony\Component\Validator\Constraints\Country;
 use Symfony\Component\Validator\Constraints\CountryValidator;
@@ -21,6 +21,11 @@ class CountryValidatorTest extends \PHPUnit_Framework_TestCase
     protected function setUp()
     {
         $this->validator = new CountryValidator();
+    }
+
+    protected function tearDown()
+    {
+        $this->validator = null;
     }
 
     public function testNullIsValid()

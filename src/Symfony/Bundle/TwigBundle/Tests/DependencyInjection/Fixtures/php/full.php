@@ -3,12 +3,8 @@
 $container->loadFromExtension('twig', array(
     'form' => array(
         'resources' => array(
-            'My::form.html.twig',
+            'MyBundle::form.html.twig',
         )
-     ),
-     'extensions' => array(
-         'twig.extension.debug',
-         'twig.extension.text',
      ),
      'globals' => array(
          'foo' => '@bar',
@@ -18,7 +14,6 @@ $container->loadFromExtension('twig', array(
      'autoescape'          => true,
      'base_template_class' => 'stdClass',
      'cache'               => '/tmp',
-     'cache_warmer'        => true,
      'charset'             => 'ISO-8859-1',
      'debug'               => true,
      'strict_variables'    => true,

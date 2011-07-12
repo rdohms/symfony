@@ -9,7 +9,7 @@
  * file that was distributed with this source code.
  */
 
-namespace Symfony\Tests\Component\Validator;
+namespace Symfony\Tests\Component\Validator\Constraints;
 
 use Symfony\Component\Validator\ExecutionContext;
 use Symfony\Component\Validator\Constraints\Choice;
@@ -37,6 +37,11 @@ class ChoiceValidatorTest extends \PHPUnit_Framework_TestCase
         $context->setCurrentClass(__CLASS__);
         $this->validator = new ChoiceValidator();
         $this->validator->initialize($context);
+    }
+
+    protected function tearDown()
+    {
+        $this->validator = null;
     }
 
     public function testExpectArrayIfMultipleIsTrue()
@@ -135,7 +140,7 @@ class ChoiceValidatorTest extends \PHPUnit_Framework_TestCase
     {
         $constraint = new Choice(array(
             'choices' => array('foo', 'bar'),
-            'message' => 'myMessage',
+            'multipleMessage' => 'myMessage',
             'multiple' => true,
         ));
 
@@ -176,5 +181,16 @@ class ChoiceValidatorTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals($this->validator->getMessageParameters(), array(
             '{{ limit }}' => 2,
         ));
+    }
+
+    public function testStrictIsFalse()
+    {
+        $constraint = new Choice(array(
+            'choices' => array(1, 2),
+            'strict' => false,
+        ));
+
+        $this->assertTrue($this->validator->isValid('2', $constraint));
+        $this->assertTrue($this->validator->isValid(2, $constraint));
     }
 }

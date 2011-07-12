@@ -22,6 +22,14 @@ use Symfony\Component\Console\Formatter\OutputFormatterInterface;
  */
 interface OutputInterface
 {
+    const VERBOSITY_QUIET   = 0;
+    const VERBOSITY_NORMAL  = 1;
+    const VERBOSITY_VERBOSE = 2;
+
+    const OUTPUT_NORMAL = 0;
+    const OUTPUT_RAW = 1;
+    const OUTPUT_PLAIN = 2;
+
     /**
      * Writes a message to the output.
      *
@@ -58,6 +66,8 @@ interface OutputInterface
      * Gets the current verbosity of the output.
      *
      * @return integer The current level of verbosity
+     *
+     * @api
      */
     function getVerbosity();
 
@@ -82,7 +92,7 @@ interface OutputInterface
     /**
      * Sets output formatter.
      *
-     * @param   OutputFormatterInterface    $formatter
+     * @param OutputFormatterInterface $formatter
      *
      * @api
      */

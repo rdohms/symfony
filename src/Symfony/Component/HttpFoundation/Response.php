@@ -82,10 +82,13 @@ class Response
      */
     public function __construct($content = '', $status = 200, $headers = array())
     {
+        $this->headers = new ResponseHeaderBag($headers);
         $this->setContent($content);
         $this->setStatusCode($status);
         $this->setProtocolVersion('1.0');
-        $this->headers = new ResponseHeaderBag($headers);
+        if (!$this->headers->has('Date')) {
+            $this->setDate(new \DateTime(null, new \DateTimeZone('UTC')));
+        }
     }
 
     /**
@@ -95,25 +98,12 @@ class Response
      */
     public function __toString()
     {
-        $content = '';
+        $this->prepare();
 
-        if (!$this->headers->has('Content-Type')) {
-            $this->headers->set('Content-Type', 'text/html; charset='.(null === $this->charset ? 'UTF-8' : $this->charset));
-        }
-
-        // status
-        $content .= sprintf('HTTP/%s %s %s', $this->version, $this->statusCode, $this->statusText)."\n";
-
-        // headers
-        foreach ($this->headers->all() as $name => $values) {
-            foreach ($values as $value) {
-                $content .= "$name: $value\n";
-            }
-        }
-
-        $content .= "\n".$this->getContent();
-
-        return $content;
+        return
+            sprintf('HTTP/%s %s %s', $this->version, $this->statusCode, $this->statusText)."\r\n".
+            $this->headers."\r\n".
+            $this->getContent();
     }
 
     /**
@@ -125,13 +115,45 @@ class Response
     }
 
     /**
+     * Prepares the Response before it is sent to the client.
+     *
+     * This method tweaks the Response to ensure that it is
+     * compliant with RFC 2616.
+     */
+    public function prepare()
+    {
+        if ($this->isInformational() || in_array($this->statusCode, array(204, 304))) {
+            $this->setContent('');
+        }
+
+        // Fix Content-Type
+        $charset = $this->charset ?: 'UTF-8';
+        if (!$this->headers->has('Content-Type')) {
+            $this->headers->set('Content-Type', 'text/html; charset='.$charset);
+        } elseif ('text/' === substr($this->headers->get('Content-Type'), 0, 5) && false === strpos($this->headers->get('Content-Type'), 'charset')) {
+            // add the charset
+            $this->headers->set('Content-Type', $this->headers->get('Content-Type').'; charset='.$charset);
+        }
+
+        // Fix Content-Length
+        if ($this->headers->has('Transfer-Encoding')) {
+            $this->headers->remove('Content-Length');
+        } elseif (!$this->headers->has('Content-Length')) {
+            $this->headers->set('Content-Length', strlen($this->content));
+        }
+    }
+
+    /**
      * Sends HTTP headers.
      */
     public function sendHeaders()
     {
-        if (!$this->headers->has('Content-Type')) {
-            $this->headers->set('Content-Type', 'text/html; charset='.(null === $this->charset ? 'UTF-8' : $this->charset));
+        // headers have already been sent by the developer
+        if (headers_sent()) {
+            return;
         }
+
+        $this->prepare();
 
         // status
         header(sprintf('HTTP/%s %s %s', $this->version, $this->statusCode, $this->statusText));
@@ -139,13 +161,13 @@ class Response
         // headers
         foreach ($this->headers->all() as $name => $values) {
             foreach ($values as $value) {
-                header($name.': '.$value);
+                header($name.': '.$value, false);
             }
         }
 
         // cookies
         foreach ($this->headers->getCookies() as $cookie) {
-            setcookie($cookie->getName(), $cookie->getValue(), $cookie->getExpire(), $cookie->getPath(), $cookie->getDomain(), $cookie->isSecure(), $cookie->isHttpOnly());
+            setcookie($cookie->getName(), $cookie->getValue(), $cookie->getExpiresTime(), $cookie->getPath(), $cookie->getDomain(), $cookie->isSecure(), $cookie->isHttpOnly());
         }
     }
 
@@ -164,16 +186,26 @@ class Response
     {
         $this->sendHeaders();
         $this->sendContent();
+
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        }
     }
 
     /**
      * Sets the response content
      *
-     * @param string $content
+     * Valid types are strings, numbers, and objects that implement a __toString() method.
+     *
+     * @param mixed $content
      */
     public function setContent($content)
     {
-        $this->content = $content;
+        if (null !== $content && !is_string($content) && !is_numeric($content) && !is_callable(array($content, '__toString'))) {
+            throw new \UnexpectedValueException('The Response content must be a string or object implementing __toString(), "'.gettype($content).'" given.');
+        }
+
+        $this->content = (string) $content;
     }
 
     /**
@@ -343,20 +375,24 @@ class Response
     /**
      * Returns the Date header as a DateTime instance.
      *
-     * When no Date header is present, the current time is returned.
-     *
      * @return \DateTime A \DateTime instance
      *
      * @throws \RuntimeException when the header is not parseable
      */
     public function getDate()
     {
-        if (null === $date = $this->headers->getDate('Date')) {
-            $date = new \DateTime(null, new \DateTimeZone('UTC'));
-            $this->headers->set('Date', $date->format('D, d M Y H:i:s').' GMT');
-        }
+        return $this->headers->getDate('Date');
+    }
 
-        return $date;
+    /**
+     * Sets the Date header.
+     *
+     * @param \DateTime $date A \DateTime instance
+     */
+    public function setDate(\DateTime $date)
+    {
+        $date->setTimezone(new \DateTimeZone('UTC'));
+        $this->headers->set('Date', $date->format('D, d M Y H:i:s').' GMT');
     }
 
     /**
@@ -458,6 +494,7 @@ class Response
      */
     public function setSharedMaxAge($value)
     {
+        $this->setPublic();
         $this->headers->addCacheControlDirective('s-maxage', $value);
     }
 
@@ -735,18 +772,13 @@ class Response
         return 404 === $this->statusCode;
     }
 
-    public function isRedirect()
+    public function isRedirect($location = null)
     {
-        return in_array($this->statusCode, array(301, 302, 303, 307));
+        return in_array($this->statusCode, array(201, 301, 302, 303, 307)) && (null === $location ?: $location == $this->headers->get('Location'));
     }
 
     public function isEmpty()
     {
         return in_array($this->statusCode, array(201, 204, 304));
-    }
-
-    public function isRedirected($location)
-    {
-        return $this->isRedirect() && $location == $this->headers->get('Location');
     }
 }
