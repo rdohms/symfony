@@ -124,7 +124,7 @@ class DateTimeToArrayTransformer extends BaseDateTimeTransformer
             throw new UnexpectedTypeException($value, 'array');
         }
 
-        if (implode('', $value) === '') {
+        if ('' === implode('', $value)) {
             return null;
         }
 
@@ -140,6 +140,22 @@ class DateTimeToArrayTransformer extends BaseDateTimeTransformer
             throw new TransformationFailedException(
                 sprintf('The fields "%s" should not be empty', implode('", "', $emptyFields)
             ));
+        }
+
+        if (isset($value['month']) && !ctype_digit($value['month']) && !is_int($value['month'])) {
+            throw new TransformationFailedException('This month is invalid');
+        }
+
+        if (isset($value['day']) && !ctype_digit($value['day']) && !is_int($value['day'])) {
+            throw new TransformationFailedException('This day is invalid');
+        }
+
+        if (isset($value['year']) && !ctype_digit($value['year']) && !is_int($value['year'])) {
+            throw new TransformationFailedException('This year is invalid');
+        }
+
+        if (!empty($value['month']) && !empty($value['day']) && !empty($value['year']) && false === checkdate($value['month'], $value['day'], $value['year'])) {
+            throw new TransformationFailedException('This is an invalid date');
         }
 
         try {

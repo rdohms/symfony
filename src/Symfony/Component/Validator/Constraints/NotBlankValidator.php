@@ -14,12 +14,25 @@ namespace Symfony\Component\Validator\Constraints;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\ConstraintValidator;
 
+/**
+ * @api
+ */
 class NotBlankValidator extends ConstraintValidator
 {
+    /**
+     * Checks if the passed value is valid.
+     *
+     * @param mixed      $value      The value that should be validated
+     * @param Constraint $constraint The constraint for the validation
+     *
+     * @return Boolean Whether or not the value is valid
+     *
+     * @api
+     */
     public function isValid($value, Constraint $constraint)
     {
-        if (null === $value || '' === $value) {
-            $this->setMessage($constraint->message);
+        if (false === $value || (empty($value) && '0' != $value)) {
+            $this->context->addViolation($constraint->message);
 
             return false;
         }

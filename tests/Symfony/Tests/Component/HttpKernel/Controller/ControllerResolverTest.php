@@ -39,6 +39,10 @@ class ControllerResolverTest extends \PHPUnit_Framework_TestCase
         $controller = $resolver->getController($request);
         $this->assertSame($this, $controller);
 
+        $request->attributes->set('_controller', 'Symfony\Tests\Component\HttpKernel\ControllerResolverTest');
+        $controller = $resolver->getController($request);
+        $this->assertInstanceOf('Symfony\Tests\Component\HttpKernel\ControllerResolverTest', $controller);
+
         $request->attributes->set('_controller', array($this, 'controllerMethod1'));
         $controller = $resolver->getController($request);
         $this->assertSame(array($this, 'controllerMethod1'), $controller);
@@ -46,6 +50,10 @@ class ControllerResolverTest extends \PHPUnit_Framework_TestCase
         $request->attributes->set('_controller', array('Symfony\Tests\Component\HttpKernel\ControllerResolverTest', 'controllerMethod4'));
         $controller = $resolver->getController($request);
         $this->assertSame(array('Symfony\Tests\Component\HttpKernel\ControllerResolverTest', 'controllerMethod4'), $controller);
+
+        $request->attributes->set('_controller', 'Symfony\Tests\Component\HttpKernel\some_controller_function');
+        $controller = $resolver->getController($request);
+        $this->assertSame('Symfony\Tests\Component\HttpKernel\some_controller_function', $controller);
 
         $request->attributes->set('_controller', 'foo');
         try {
@@ -100,6 +108,24 @@ class ControllerResolverTest extends \PHPUnit_Framework_TestCase
 
         $request = Request::create('/');
         $request->attributes->set('foo', 'foo');
+        $controller = function ($foo, $bar = 'bar') {};
+        $this->assertEquals(array('foo', 'bar'), $resolver->getArguments($request, $controller));
+
+        $request = Request::create('/');
+        $request->attributes->set('foo', 'foo');
+        $controller = new self();
+        $this->assertEquals(array('foo', null), $resolver->getArguments($request, $controller));
+        $request->attributes->set('bar', 'bar');
+        $this->assertEquals(array('foo', 'bar'), $resolver->getArguments($request, $controller));
+
+        $request = Request::create('/');
+        $request->attributes->set('foo', 'foo');
+        $request->attributes->set('foobar', 'foobar');
+        $controller = 'Symfony\Tests\Component\HttpKernel\some_controller_function';
+        $this->assertEquals(array('foo', 'foobar'), $resolver->getArguments($request, $controller));
+
+        $request = Request::create('/');
+        $request->attributes->set('foo', 'foo');
         $request->attributes->set('foobar', 'foobar');
         $controller = array(new self(), 'controllerMethod3');
 
@@ -115,7 +141,7 @@ class ControllerResolverTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals(array($request), $resolver->getArguments($request, $controller), '->getArguments() injects the request');
     }
 
-    public function __invoke()
+    public function __invoke($foo, $bar = null)
     {
     }
 
@@ -138,4 +164,8 @@ class ControllerResolverTest extends \PHPUnit_Framework_TestCase
     protected function controllerMethod5(Request $request)
     {
     }
+}
+
+function some_controller_function($foo, $foobar)
+{
 }

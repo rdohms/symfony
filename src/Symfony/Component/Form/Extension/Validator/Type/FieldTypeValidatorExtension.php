@@ -27,13 +27,18 @@ class FieldTypeValidatorExtension extends AbstractTypeExtension
 
     public function buildForm(FormBuilder $builder, array $options)
     {
-        $options['validation_groups'] = empty($options['validation_groups'])
-            ? null
-            : (array)$options['validation_groups'];
+        if (empty($options['validation_groups'])) {
+            $options['validation_groups'] = null;
+        } else {
+            $options['validation_groups'] = is_callable($options['validation_groups'])
+                ? $options['validation_groups']
+                : (array) $options['validation_groups'];
+        }
 
         $builder
             ->setAttribute('validation_groups', $options['validation_groups'])
             ->setAttribute('validation_constraint', $options['validation_constraint'])
+            ->setAttribute('cascade_validation', $options['cascade_validation'])
             ->addValidator(new DelegatingValidator($this->validator));
     }
 
@@ -42,6 +47,7 @@ class FieldTypeValidatorExtension extends AbstractTypeExtension
         return array(
             'validation_groups' => null,
             'validation_constraint' => null,
+            'cascade_validation' => false,
         );
     }
 

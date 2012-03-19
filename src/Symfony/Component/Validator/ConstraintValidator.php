@@ -11,18 +11,33 @@
 
 namespace Symfony\Component\Validator;
 
+/**
+ * Base class for constraint validators
+ *
+ * @author Bernhard Schussek <bschussek@gmail.com>
+ *
+ * @api
+ */
+use Symfony\Component\Validator\Exception\ValidatorException;
+
 abstract class ConstraintValidator implements ConstraintValidatorInterface
 {
     /**
      * @var ExecutionContext
      */
     protected $context;
+
     /**
      * @var string
+     *
+     * @deprecated
      */
     private $messageTemplate;
+
     /**
      * @var array
+     *
+     * @deprecated
      */
     private $messageParameters;
 
@@ -38,6 +53,8 @@ abstract class ConstraintValidator implements ConstraintValidatorInterface
 
     /**
      * {@inheritDoc}
+     *
+     * @deprecated
      */
     public function getMessageTemplate()
     {
@@ -46,15 +63,28 @@ abstract class ConstraintValidator implements ConstraintValidatorInterface
 
     /**
      * {@inheritDoc}
+     *
+     * @deprecated
      */
     public function getMessageParameters()
     {
         return $this->messageParameters;
     }
 
+    /**
+     * Wrapper for $this->context->addViolation()
+     *
+     * @deprecated
+     */
     protected function setMessage($template, array $parameters = array())
     {
         $this->messageTemplate = $template;
         $this->messageParameters = $parameters;
+
+        if (!$this->context instanceof ExecutionContext) {
+            throw new ValidatorException('ConstraintValidator::initialize() must be called before setting violation messages');
+        }
+
+        $this->context->addViolation($template, $parameters);
     }
 }

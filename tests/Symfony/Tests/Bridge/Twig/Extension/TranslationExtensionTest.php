@@ -14,6 +14,7 @@ namespace Symfony\Tests\Bridge\Twig\Extension;
 use Symfony\Bridge\Twig\Extension\TranslationExtension;
 use Symfony\Component\Translation\Translator;
 use Symfony\Component\Translation\MessageSelector;
+use Symfony\Component\Translation\Loader\ArrayLoader;
 use Symfony\Tests\Bridge\Twig\TestCase;
 
 class TranslationExtensionTest extends TestCase
@@ -63,6 +64,8 @@ class TranslationExtensionTest extends TestCase
             array('{% trans with { \'%name%\': \'Symfony2\' } %}Hello %name%{% endtrans %}', 'Hello Symfony2'),
             array('{% set vars = { \'%name%\': \'Symfony2\' } %}{% trans with vars %}Hello %name%{% endtrans %}', 'Hello Symfony2'),
 
+            array('{% trans into "fr"%}Hello{% endtrans %}', 'Hello'),
+
             // transchoice
             array('{% transchoice count from "messages" %}{0} There is no apples|{1} There is one apple|]1,Inf] There is %count% apples{% endtranschoice %}',
                 'There is no apples', array('count' => 0)),
@@ -72,24 +75,70 @@ class TranslationExtensionTest extends TestCase
                 'There is 5 apples (Symfony2)', array('count' => 5, 'name' => 'Symfony2')),
             array('{% transchoice count with { \'%name%\': \'Symfony2\' } %}{0} There is no apples|{1} There is one apple|]1,Inf] There is %count% apples (%name%){% endtranschoice %}',
                 'There is 5 apples (Symfony2)', array('count' => 5)),
+            array('{% transchoice count into "fr"%}{0} There is no apples|{1} There is one apple|]1,Inf] There is %count% apples{% endtranschoice %}',
+                'There is no apples', array('count' => 0)),
 
             // trans filter
             array('{{ "Hello"|trans }}', 'Hello'),
             array('{{ name|trans }}', 'Symfony2', array('name' => 'Symfony2')),
             array('{{ hello|trans({ \'%name%\': \'Symfony2\' }) }}', 'Hello Symfony2', array('hello' => 'Hello %name%')),
             array('{% set vars = { \'%name%\': \'Symfony2\' } %}{{ hello|trans(vars) }}', 'Hello Symfony2', array('hello' => 'Hello %name%')),
+            array('{{ "Hello"|trans({}, "messages", "fr") }}', 'Hello'),
 
             // transchoice filter
             array('{{ "{0} There is no apples|{1} There is one apple|]1,Inf] There is %count% apples"|transchoice(count) }}', 'There is 5 apples', array('count' => 5)),
             array('{{ text|transchoice(5, {\'%name%\': \'Symfony2\'}) }}', 'There is 5 apples (Symfony2)', array('text' => '{0} There is no apples|{1} There is one apple|]1,Inf] There is %count% apples (%name%)')),
+            array('{{ "{0} There is no apples|{1} There is one apple|]1,Inf] There is %count% apples"|transchoice(count, {}, "messages", "fr") }}', 'There is 5 apples', array('count' => 5)),
         );
     }
 
-    protected function getTemplate($template)
+    public function testDefaultTranslationDomain()
     {
-        $loader = new \Twig_Loader_Array(array('index' => $template));
+        $templates = array(
+            'index' => '
+                {%- extends "base" %}
+
+                {%- trans_default_domain "foo" %}
+
+                {%- block content %}
+                    {%- trans %}foo{% endtrans %}
+                    {%- trans from "custom" %}foo{% endtrans %}
+                    {{- "foo"|trans }}
+                    {{- "foo"|trans({}, "custom") }}
+                    {{- "foo"|transchoice(1) }}
+                    {{- "foo"|transchoice(1, {}, "custom") }}
+                {% endblock %}
+            ',
+
+            'base' => '
+                {%- block content "" %}
+            ',
+        );
+
+        $translator = new Translator('en', new MessageSelector());
+        $translator->addLoader('array', new ArrayLoader());
+        $translator->addResource('array', array('foo' => 'foo (messages)'), 'en');
+        $translator->addResource('array', array('foo' => 'foo (custom)'), 'en', 'custom');
+        $translator->addResource('array', array('foo' => 'foo (foo)'), 'en', 'foo');
+
+        $template = $this->getTemplate($templates, $translator);
+
+        $this->assertEquals('foo (foo)foo (custom)foo (foo)foo (custom)foo (foo)foo (custom)', trim($template->render(array())));
+    }
+
+    protected function getTemplate($template, $translator = null)
+    {
+        if (null === $translator) {
+            $translator = new Translator('en', new MessageSelector());
+        }
+
+        if (is_array($template)) {
+            $loader = new \Twig_Loader_Array($template);
+        } else {
+            $loader = new \Twig_Loader_Array(array('index' => $template));
+        }
         $twig = new \Twig_Environment($loader, array('debug' => true, 'cache' => false));
-        $twig->addExtension(new TranslationExtension(new Translator('en', new MessageSelector())));
+        $twig->addExtension(new TranslationExtension($translator));
 
         return $twig->loadTemplate('index');
     }

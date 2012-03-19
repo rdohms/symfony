@@ -16,7 +16,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 
 /**
- *
+ * Redirects a request to another URL.
  *
  * @author Fabien Potencier <fabien@symfony.com>
  */
@@ -42,8 +42,8 @@ class RedirectController extends ContainerAware
             return new Response(null, 410);
         }
 
-        $attributes = $this->container->get('request')->attributes->all();
-        unset($attributes['_route'], $attributes['route'], $attributes['permanent'] );
+        $attributes = $this->container->get('request')->attributes->get('_route_params');
+        unset($attributes['route'], $attributes['permanent']);
 
         return new RedirectResponse($this->container->get('router')->generate($route, $attributes), $permanent ? 301 : 302);
     }
@@ -74,6 +74,7 @@ class RedirectController extends ContainerAware
         if (null === $scheme) {
             $scheme = $request->getScheme();
         }
+
         $qs = $request->getQueryString();
         if ($qs) {
             $qs = '?'.$qs;
@@ -82,7 +83,7 @@ class RedirectController extends ContainerAware
         $port = '';
         if ('http' === $scheme && 80 != $httpPort) {
             $port = ':'.$httpPort;
-        } elseif ('https' === $scheme && 443 != $httpPort) {
+        } elseif ('https' === $scheme && 443 != $httpsPort) {
             $port = ':'.$httpsPort;
         }
 

@@ -16,6 +16,8 @@ use Symfony\Component\Form\FormValidatorInterface;
 use Symfony\Component\Form\FormError;
 use Symfony\Component\Form\Util\VirtualFormAwareIterator;
 use Symfony\Component\Form\Exception\FormException;
+use Symfony\Component\Form\Util\PropertyPath;
+use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\ValidatorInterface;
 use Symfony\Component\Validator\ExecutionContext;
 
@@ -53,11 +55,29 @@ class DelegatingValidator implements FormValidatorInterface
                     $form->getAttribute('validation_constraint'),
                     self::getFormValidationGroups($form)
                 );
-            } else {
-                $violations = $this->validator->validate($form);
-            }
 
-            if ($violations) {
+                if ($violations) {
+                    foreach ($violations as $violation) {
+                        $propertyPath = new PropertyPath($violation->getPropertyPath());
+                        $template = $violation->getMessageTemplate();
+                        $parameters = $violation->getMessageParameters();
+                        $error = new FormError($template, $parameters);
+
+                        $child = $form;
+                        foreach ($propertyPath->getElements() as $element) {
+                            $children = $child->getChildren();
+                            if (!isset($children[$element])) {
+                                $form->addError($error);
+                                break;
+                            }
+
+                            $child = $children[$element];
+                        }
+
+                        $child->addError($error);
+                    }
+                }
+            } elseif (count($violations = $this->validator->validate($form))) {
                 foreach ($violations as $violation) {
                     $propertyPath = $violation->getPropertyPath();
                     $template = $violation->getMessageTemplate();
@@ -91,10 +111,6 @@ class DelegatingValidator implements FormValidatorInterface
             $propertyPath = $context->getPropertyPath();
             $graphWalker = $context->getGraphWalker();
 
-            // The Execute constraint is called on class level, so we need to
-            // set the property manually
-            $context->setCurrentProperty('data');
-
             // Adjust the property path accordingly
             if (!empty($propertyPath)) {
                 $propertyPath .= '.';
@@ -108,12 +124,33 @@ class DelegatingValidator implements FormValidatorInterface
         }
     }
 
+    static public function validateFormChildren(FormInterface $form, ExecutionContext $context)
+    {
+        if ($form->getAttribute('cascade_validation')) {
+            $propertyPath = $context->getPropertyPath();
+            $graphWalker = $context->getGraphWalker();
+
+            // Adjust the property path accordingly
+            if (!empty($propertyPath)) {
+                $propertyPath .= '.';
+            }
+
+            $propertyPath .= 'children';
+
+            $graphWalker->walkReference($form->getChildren(), Constraint::DEFAULT_GROUP, $propertyPath, true);
+        }
+    }
+
     static protected function getFormValidationGroups(FormInterface $form)
     {
         $groups = null;
 
         if ($form->hasAttribute('validation_groups')) {
             $groups = $form->getAttribute('validation_groups');
+
+            if (is_callable($groups)) {
+                $groups = (array) call_user_func($groups, $form);
+            }
         }
 
         $currentForm = $form;
@@ -122,6 +159,10 @@ class DelegatingValidator implements FormValidatorInterface
 
             if ($currentForm->hasAttribute('validation_groups')) {
                 $groups = $currentForm->getAttribute('validation_groups');
+
+                if (is_callable($groups)) {
+                    $groups = (array) call_user_func($groups, $currentForm);
+                }
             }
         }
 
@@ -134,8 +175,7 @@ class DelegatingValidator implements FormValidatorInterface
 
     private function buildFormPathMapping(FormInterface $form, array &$mapping, $formPath = 'children', $namePath = '')
     {
-        foreach ($form->getAttribute('error_mapping') as $nestedDataPath => $nestedNamePath)
-        {
+        foreach ($form->getAttribute('error_mapping') as $nestedDataPath => $nestedNamePath) {
             $mapping['/^'.preg_quote($formPath.'.data.'.$nestedDataPath).'(?!\w)/'] = $namePath.'.'.$nestedNamePath;
         }
 
@@ -143,15 +183,14 @@ class DelegatingValidator implements FormValidatorInterface
         $iterator = new \RecursiveIteratorIterator($iterator);
 
         foreach ($iterator as $child) {
-            $path = (string)$child->getAttribute('property_path');
+            $path = (string) $child->getAttribute('property_path');
             $parts = explode('.', $path, 2);
 
             $nestedNamePath = $namePath.'.'.$child->getName();
 
             if ($child->hasChildren() || isset($parts[1])) {
                 $nestedFormPath = $formPath.'['.trim($parts[0], '[]').']';
-            }
-            else {
+            } else {
                 $nestedFormPath = $formPath.'.data.'.$parts[0];
             }
 
@@ -169,8 +208,7 @@ class DelegatingValidator implements FormValidatorInterface
 
     private function buildDataPathMapping(FormInterface $form, array &$mapping, $dataPath = 'data', $namePath = '')
     {
-        foreach ($form->getAttribute('error_mapping') as $nestedDataPath => $nestedNamePath)
-        {
+        foreach ($form->getAttribute('error_mapping') as $nestedDataPath => $nestedNamePath) {
             $mapping['/^'.preg_quote($dataPath.'.'.$nestedDataPath).'(?!\w)/'] = $namePath.'.'.$nestedNamePath;
         }
 
@@ -178,11 +216,11 @@ class DelegatingValidator implements FormValidatorInterface
         $iterator = new \RecursiveIteratorIterator($iterator);
 
         foreach ($iterator as $child) {
-            $path = (string)$child->getAttribute('property_path');
+            $path = (string) $child->getAttribute('property_path');
 
             $nestedNamePath = $namePath.'.'.$child->getName();
 
-            if (strpos($path, '[') === 0) {
+            if (0 === strpos($path, '[')) {
                 $nestedDataPaths = array($dataPath.$path);
             } else {
                 $nestedDataPaths = array($dataPath.'.'.$path);

@@ -94,11 +94,18 @@ class ParameterBagTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals(array('bar' => array('bar' => array('bar' => 'bar'))), $bag->resolveValue(array('%foo%' => array('%foo%' => array('%foo%' => '%foo%')))), '->resolveValue() replaces placeholders in nested arrays');
         $this->assertEquals('I\'m a %%foo%%', $bag->resolveValue('I\'m a %%foo%%'), '->resolveValue() supports % escaping by doubling it');
         $this->assertEquals('I\'m a bar %%foo bar', $bag->resolveValue('I\'m a %foo% %%foo %foo%'), '->resolveValue() supports % escaping by doubling it');
+        $this->assertEquals(array('foo' => array('bar' => array('ding' => 'I\'m a bar %%foo %%bar'))), $bag->resolveValue(array('foo' => array('bar' => array('ding' => 'I\'m a bar %%foo %%bar')))), '->resolveValue() supports % escaping by doubling it');
 
         $bag = new ParameterBag(array('foo' => true));
-        $this->assertSame(true, $bag->resolveValue('%foo%'), '->resolveValue() replaces arguments that are just a placeholder by their value without casting them to strings');
+        $this->assertTrue($bag->resolveValue('%foo%'), '->resolveValue() replaces arguments that are just a placeholder by their value without casting them to strings');
         $bag = new ParameterBag(array('foo' => null));
-        $this->assertSame(null, $bag->resolveValue('%foo%'), '->resolveValue() replaces arguments that are just a placeholder by their value without casting them to strings');
+        $this->assertNull($bag->resolveValue('%foo%'), '->resolveValue() replaces arguments that are just a placeholder by their value without casting them to strings');
+
+        $bag = new ParameterBag(array('foo' => 'bar', 'baz' => '%%%foo% %foo%%% %%foo%% %%%foo%%%'));
+        $this->assertEquals('%%bar bar%% %%foo%% %%bar%%', $bag->resolveValue('%baz%'), '->resolveValue() replaces params placed besides escaped %');
+
+        $bag = new ParameterBag(array('baz' => '%%s?%%s'));
+        $this->assertEquals('%%s?%%s', $bag->resolveValue('%baz%'), '->resolveValue() is not replacing greedily');
 
         $bag = new ParameterBag(array());
         try {
@@ -120,7 +127,7 @@ class ParameterBagTest extends \PHPUnit_Framework_TestCase
             $bag->resolveValue('%foo%');
             $this->fail('->resolveValue() throws a RuntimeException when a parameter embeds another non-string parameter');
         } catch (RuntimeException $e) {
-            $this->assertEquals('A parameter cannot contain a non-string parameter.', $e->getMessage(), '->resolveValue() throws a RuntimeException when a parameter embeds another non-string parameter');
+            $this->assertEquals('A string value must be composed of strings and/or numbers, but found parameter "bar" of type array inside string value "a %bar%".', $e->getMessage(), '->resolveValue() throws a RuntimeException when a parameter embeds another non-string parameter');
         }
 
         $bag = new ParameterBag(array('foo' => '%bar%', 'bar' => '%foobar%', 'foobar' => '%foo%'));
@@ -138,6 +145,9 @@ class ParameterBagTest extends \PHPUnit_Framework_TestCase
         } catch (ParameterCircularReferenceException $e) {
             $this->assertEquals('Circular reference detected for parameter "foo" ("foo" > "bar" > "foobar" > "foo").', $e->getMessage(), '->resolveValue() throws a ParameterCircularReferenceException when a parameter has a circular reference');
         }
+
+        $bag = new ParameterBag(array('host' => 'foo.bar', 'port' => 1337));
+        $this->assertEquals('foo.bar:1337', $bag->resolveValue('%host%:%port%'));
     }
 
     /**
@@ -160,5 +170,46 @@ class ParameterBagTest extends \PHPUnit_Framework_TestCase
         } catch (ParameterNotFoundException $e) {
             $this->assertEquals('The parameter "foo" has a dependency on a non-existent parameter "bar".', $e->getMessage());
         }
+    }
+
+    /**
+     * @covers Symfony\Component\DependencyInjection\ParameterBag\ParameterBag::resolve
+     */
+    public function testResolveUnescapesValue()
+    {
+        $bag = new ParameterBag(array(
+            'foo' => array('bar' => array('ding' => 'I\'m a bar %%foo %%bar')),
+            'bar' => 'I\'m a %%foo%%',
+        ));
+
+        $bag->resolve();
+
+        $this->assertEquals('I\'m a %foo%', $bag->get('bar'), '->resolveValue() supports % escaping by doubling it');
+        $this->assertEquals(array('bar' => array('ding' => 'I\'m a bar %foo %bar')), $bag->get('foo'), '->resolveValue() supports % escaping by doubling it');
+    }
+
+    /**
+     * @covers Symfony\Component\DependencyInjection\ParameterBag\ParameterBag::resolve
+     * @dataProvider stringsWithSpacesProvider
+     */
+    public function testResolveStringWithSpacesReturnsString($expected, $test, $description)
+    {
+        $bag = new ParameterBag(array('foo' => 'bar'));
+
+        try {
+            $this->assertEquals($expected, $bag->resolveString($test), $description);
+        } catch (ParameterNotFoundException $e) {
+            $this->fail(sprintf('%s - "%s"', $description, $expected));
+        }
+    }
+
+    public function stringsWithSpacesProvider()
+    {
+        return array(
+            array('bar', '%foo%', 'Parameters must be wrapped by %.'),
+            array('% foo %', '% foo %', 'Parameters should not have spaces.'),
+            array('{% set my_template = "foo" %}', '{% set my_template = "foo" %}', 'Twig-like strings are not parameters.'),
+            array('50% is less than 100%', '50% is less than 100%', 'Text between % signs is allowed, if there are spaces.'),
+        );
     }
 }

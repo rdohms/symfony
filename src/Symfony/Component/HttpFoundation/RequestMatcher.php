@@ -15,13 +15,36 @@ namespace Symfony\Component\HttpFoundation;
  * RequestMatcher compares a pre-defined set of checks against a Request instance.
  *
  * @author Fabien Potencier <fabien@symfony.com>
+ *
+ * @api
  */
 class RequestMatcher implements RequestMatcherInterface
 {
+    /**
+     * @var string
+     */
     private $path;
+
+    /**
+     * @var string
+     */
     private $host;
+
+    /**
+     * @var string
+     */
     private $methods;
+
+    /**
+     * @var string
+     */
     private $ip;
+
+    /**
+     * Attributes.
+     *
+     * @var array
+     */
     private $attributes;
 
     public function __construct($path = null, $host = null, $methods = null, $ip = null, array $attributes = array())
@@ -86,6 +109,8 @@ class RequestMatcher implements RequestMatcherInterface
 
     /**
      * {@inheritdoc}
+     *
+     * @api
      */
     public function matches(Request $request)
     {
@@ -100,11 +125,7 @@ class RequestMatcher implements RequestMatcherInterface
         }
 
         if (null !== $this->path) {
-            if (null !== $session = $request->getSession()) {
-                $path = strtr($this->path, array('{_locale}' => $session->getLocale(), '#' => '\\#'));
-            } else {
-                $path = str_replace('#', '\\#', $this->path);
-            }
+            $path = str_replace('#', '\\#', $this->path);
 
             if (!preg_match('#'.$path.'#', $request->getPathInfo())) {
                 return false;
@@ -122,6 +143,14 @@ class RequestMatcher implements RequestMatcherInterface
         return true;
     }
 
+    /**
+     * Validates an IP address.
+     *
+     * @param string $requestIp
+     * @param string $ip
+     *
+     * @return boolean True valid, false if not.
+     */
     protected function checkIp($requestIp, $ip)
     {
         // IPv6 address
@@ -132,10 +161,18 @@ class RequestMatcher implements RequestMatcherInterface
         }
     }
 
+    /**
+     * Validates an IPv4 address.
+     *
+     * @param string $requestIp
+     * @param string $ip
+     *
+     * @return boolean True valid, false if not.
+     */
     protected function checkIp4($requestIp, $ip)
     {
         if (false !== strpos($ip, '/')) {
-            list($address, $netmask) = explode('/', $ip);
+            list($address, $netmask) = explode('/', $ip, 2);
 
             if ($netmask < 1 || $netmask > 32) {
                 return false;
@@ -149,21 +186,32 @@ class RequestMatcher implements RequestMatcherInterface
     }
 
     /**
+     * Validates an IPv6 address.
+     *
      * @author David Soria Parra <dsp at php dot net>
      * @see https://github.com/dsp/v6tools
+     *
+     * @param string $requestIp
+     * @param string $ip
+     *
+     * @return boolean True valid, false if not.
      */
     protected function checkIp6($requestIp, $ip)
     {
-        list($address, $netmask) = explode('/', $ip);
+        if (!defined('AF_INET6')) {
+            throw new \RuntimeException('Unable to check Ipv6. Check that PHP was not compiled with option "disable-ipv6".');
+        }
 
-        $bytes_addr = unpack("n*", inet_pton($address));
-        $bytes_test = unpack("n*", inet_pton($requestIp));
+        list($address, $netmask) = explode('/', $ip, 2);
+
+        $bytesAddr = unpack("n*", inet_pton($address));
+        $bytesTest = unpack("n*", inet_pton($requestIp));
 
         for ($i = 1, $ceil = ceil($netmask / 16); $i <= $ceil; $i++) {
             $left = $netmask - 16 * ($i-1);
-            $left = ($left <= 16) ?: 16;
+            $left = ($left <= 16) ? $left : 16;
             $mask = ~(0xffff >> $left) & 0xffff;
-            if (($bytes_addr[$i] & $mask) != ($bytes_test[$i] & $mask)) {
+            if (($bytesAddr[$i] & $mask) != ($bytesTest[$i] & $mask)) {
                 return false;
             }
         }

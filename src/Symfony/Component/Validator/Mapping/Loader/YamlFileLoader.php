@@ -11,7 +11,6 @@
 
 namespace Symfony\Component\Validator\Mapping\Loader;
 
-use Symfony\Component\Validator\Exception\MappingException;
 use Symfony\Component\Validator\Mapping\ClassMetadata;
 use Symfony\Component\Yaml\Yaml;
 
@@ -54,6 +53,10 @@ class YamlFileLoader extends FileLoader
 
         if (isset($this->classes[$metadata->getClassName()])) {
             $yaml = $this->classes[$metadata->getClassName()];
+
+            if (isset($yaml['group_sequence_provider'])) {
+                $metadata->setGroupSequenceProvider((bool)$yaml['group_sequence_provider']);
+            }
 
             if (isset($yaml['constraints'])) {
                 foreach ($this->parseNodes($yaml['constraints']) as $constraint) {

@@ -14,8 +14,21 @@ namespace Symfony\Component\Validator\Constraints;
 use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\ConstraintValidator;
 
+/**
+ * @api
+ */
 class MaxValidator extends ConstraintValidator
 {
+    /**
+     * Checks if the passed value is valid.
+     *
+     * @param mixed      $value      The value that should be validated
+     * @param Constraint $constraint The constrain for the validation
+     *
+     * @return Boolean Whether or not the value is valid
+     *
+     * @api
+     */
     public function isValid($value, Constraint $constraint)
     {
         if (null === $value) {
@@ -23,7 +36,7 @@ class MaxValidator extends ConstraintValidator
         }
 
         if (!is_numeric($value)) {
-            $this->setMessage($constraint->invalidMessage, array(
+            $this->context->addViolation($constraint->invalidMessage, array(
                 '{{ value }}' => $value,
                 '{{ limit }}' => $constraint->limit,
             ));
@@ -32,7 +45,7 @@ class MaxValidator extends ConstraintValidator
         }
 
         if ($value > $constraint->limit) {
-            $this->setMessage($constraint->message, array(
+            $this->context->addViolation($constraint->message, array(
                 '{{ value }}' => $value,
                 '{{ limit }}' => $constraint->limit,
             ));

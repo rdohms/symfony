@@ -32,20 +32,37 @@ class InlineTest extends \PHPUnit_Framework_TestCase
         }
 
         foreach ($this->getTestsForParse() as $yaml => $value) {
-            if ($value == 1230) {
-                continue;
-            }
-
             $this->assertEquals($value, Inline::parse(Inline::dump($value)), 'check consistency');
         }
 
         foreach ($testsForDump as $yaml => $value) {
-            if ($value == 1230) {
-                continue;
-            }
-
             $this->assertEquals($value, Inline::parse(Inline::dump($value)), 'check consistency');
         }
+    }
+
+    public function testDumpNumericValueWithLocale()
+    {
+        $locale = setlocale(LC_NUMERIC, 0);
+        if (false === $locale) {
+            $this->markTestSkipped('Your platform does not support locales.');
+        }
+
+        $required_locales = array('fr_FR.UTF-8', 'fr_FR.UTF8', 'fr_FR.utf-8', 'fr_FR.utf8', 'French_France.1252');
+        if (false === setlocale(LC_ALL, $required_locales)) {
+            $this->markTestSkipped('Could not set any of required locales: ' . implode(", ", $required_locales));
+        }
+
+        $this->assertEquals('1.2', Inline::dump(1.2));
+        $this->assertContains('fr', strtolower(setlocale(LC_NUMERIC, 0)));
+
+        setlocale(LC_ALL, $locale);
+    }
+
+    public function testHashStringsResemblingExponentialNumericsShouldNotBeChangedToINF()
+    {
+        $value = '686e444';
+
+        $this->assertSame($value, Inline::parse(Inline::dump($value)));
     }
 
     protected function getTestsForParse()
@@ -63,6 +80,8 @@ class InlineTest extends \PHPUnit_Framework_TestCase
             '02333' => 02333,
             '.Inf' => -log(0),
             '-.Inf' => log(0),
+            "'686e444'" => '686e444',
+            '686e444' => 646e444,
             '123456789123456789' => '123456789123456789',
             '"foo\r\nbar"' => "foo\r\nbar",
             "'foo#bar'" => 'foo#bar',
@@ -121,6 +140,8 @@ class InlineTest extends \PHPUnit_Framework_TestCase
             '1243' => 02333,
             '.Inf' => -log(0),
             '-.Inf' => log(0),
+            "'686e444'" => '686e444',
+            '.Inf' => 646e444,
             '"foo\r\nbar"' => "foo\r\nbar",
             "'foo#bar'" => 'foo#bar',
             "'foo # bar'" => 'foo # bar',

@@ -17,10 +17,16 @@ use Symfony\Component\Templating\Storage\StringStorage;
 use Symfony\Component\Templating\Helper\HelperInterface;
 use Symfony\Component\Templating\Loader\LoaderInterface;
 
+if (!defined('ENT_SUBSTITUTE')) {
+    define('ENT_SUBSTITUTE', 8);
+}
+
 /**
  * PhpEngine is an engine able to render PHP templates.
  *
  * @author Fabien Potencier <fabien@symfony.com>
+ *
+ * @api
  */
 class PhpEngine implements EngineInterface, \ArrayAccess
 {
@@ -70,6 +76,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
      *
      * @throws \InvalidArgumentException if the template does not exist
      * @throws \RuntimeException         if the template cannot be rendered
+     *
+     * @api
      */
     public function render($name, array $parameters = array())
     {
@@ -105,6 +113,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
      * @param mixed $name A template name or a TemplateReferenceInterface instance
      *
      * @return Boolean true if the template exists, false otherwise
+     *
+     * @api
      */
     public function exists($name)
     {
@@ -123,6 +133,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
      * @param mixed $name A template name or a TemplateReferenceInterface instance
      *
      * @return Boolean true if this class supports the given resource, false otherwise
+     *
+     * @api
      */
     public function supports($name)
     {
@@ -142,15 +154,20 @@ class PhpEngine implements EngineInterface, \ArrayAccess
     protected function evaluate(Storage $template, array $parameters = array())
     {
         $__template__ = $template;
+
+        if (isset($parameters['__template__'])) {
+            throw new \InvalidArgumentException('Invalid parameter (__template__)');
+        }
+
         if ($__template__ instanceof FileStorage) {
-            extract($parameters);
+            extract($parameters, EXTR_SKIP);
             $view = $this;
             ob_start();
             require $__template__;
 
             return ob_get_clean();
         } elseif ($__template__ instanceof StringStorage) {
-            extract($parameters);
+            extract($parameters, EXTR_SKIP);
             $view = $this;
             ob_start();
             eval('; ?>'.$__template__.'<?php ;');
@@ -169,6 +186,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
      * @return mixed The helper value
      *
      * @throws \InvalidArgumentException if the helper is not defined
+     *
+     * @api
      */
     public function offsetGet($name)
     {
@@ -181,6 +200,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
      * @param string  $name The helper name
      *
      * @return Boolean true if the helper is defined, false otherwise
+     *
+     * @api
      */
     public function offsetExists($name)
     {
@@ -192,6 +213,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
      *
      * @param HelperInterface $name  The helper instance
      * @param string          $value An alias
+     *
+     * @api
      */
     public function offsetSet($name, $value)
     {
@@ -202,6 +225,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
      * Removes a helper.
      *
      * @param string $name The helper name
+     *
+     * @api
      */
     public function offsetUnset($name)
     {
@@ -210,6 +235,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
 
     /**
      * @param Helper[] $helpers An array of helper
+     *
+     * @api
      */
     public function addHelpers(array $helpers)
     {
@@ -221,7 +248,9 @@ class PhpEngine implements EngineInterface, \ArrayAccess
     /**
      * Sets the helpers.
      *
-     * @params Helper[] $helpers An array of helper
+     * @param Helper[] $helpers An array of helper
+     *
+     * @api
      */
     public function setHelpers(array $helpers)
     {
@@ -234,6 +263,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
      *
      * @param HelperInterface $helper The helper instance
      * @param string          $alias  An alias
+     *
+     * @api
      */
     public function set(HelperInterface $helper, $alias = null)
     {
@@ -251,6 +282,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
      * @param string  $name The helper name
      *
      * @return Boolean true if the helper is defined, false otherwise
+     *
+     * @api
      */
     public function has($name)
     {
@@ -265,6 +298,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
      * @return HelperInterface The helper instance
      *
      * @throws \InvalidArgumentException if the helper is not defined
+     *
+     * @api
      */
     public function get($name)
     {
@@ -279,6 +314,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
      * Decorates the current template with another one.
      *
      * @param string $template  The decorator logical name
+     *
+     * @api
      */
     public function extend($template)
     {
@@ -292,6 +329,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
      * @param string $context The context name
      *
      * @return string The escaped value
+     *
+     * @api
      */
     public function escape($value, $context = 'html')
     {
@@ -302,6 +341,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
      * Sets the charset to use.
      *
      * @param string $charset The charset
+     *
+     * @api
      */
     public function setCharset($charset)
     {
@@ -312,6 +353,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
      * Gets the current charset.
      *
      * @return string The current charset
+     *
+     * @api
      */
     public function getCharset()
     {
@@ -323,6 +366,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
      *
      * @param string $context The escaper context (html, js, ...)
      * @param mixed  $escaper A PHP callable
+     *
+     * @api
      */
     public function setEscaper($context, $escaper)
     {
@@ -335,6 +380,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
      * @param string $context The context name
      *
      * @return mixed  $escaper A PHP callable
+     *
+     * @api
      */
     public function getEscaper($context)
     {
@@ -348,6 +395,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
     /**
      * @param string $name
      * @param mixed $value
+     *
+     * @api
      */
     public function addGlobal($name, $value)
     {
@@ -358,6 +407,8 @@ class PhpEngine implements EngineInterface, \ArrayAccess
      * Returns the assigned globals.
      *
      * @return array
+     *
+     * @api
      */
     public function getGlobals()
     {
@@ -398,7 +449,7 @@ class PhpEngine implements EngineInterface, \ArrayAccess
                 {
                     // Numbers and Boolean values get turned into strings which can cause problems
                     // with type comparisons (e.g. === or is_int() etc).
-                    return is_string($value) ? htmlspecialchars($value, ENT_QUOTES, $that->getCharset(), false) : $value;
+                    return is_string($value) ? htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, $that->getCharset(), false) : $value;
                 },
 
             'js' =>

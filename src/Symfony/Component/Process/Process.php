@@ -21,6 +21,9 @@ namespace Symfony\Component\Process;
  */
 class Process
 {
+    const ERR = 'err';
+    const OUT = 'out';
+
     private $commandline;
     private $cwd;
     private $env;
@@ -31,13 +34,62 @@ class Process
     private $status;
     private $stdout;
     private $stderr;
+    private $enhanceWindowsCompatibility;
+
+    /**
+     * Exit codes translation table.
+     *
+     * @var array
+     */
+    static public $exitCodes = array(
+        0 => 'OK',
+        1 => 'General error',
+        2 => 'Misuse of shell builtins',
+
+        126 => 'Invoked command cannot execute',
+        127 => 'Command not found',
+        128 => 'Invalid exit argument',
+
+        // signals
+        129 => 'Hangup',
+        130 => 'Interrupt',
+        131 => 'Quit and dump core',
+        132 => 'Illegal instruction',
+        133 => 'Trace/breakpoint trap',
+        134 => 'Process aborted',
+        135 => 'Bus error: "access to undefined portion of memory object"',
+        136 => 'Floating point exception: "erroneous arithmetic operation"',
+        137 => 'Kill (terminate immediately)',
+        138 => 'User-defined 1',
+        139 => 'Segmentation violation',
+        140 => 'User-defined 2',
+        141 => 'Write to pipe with no one reading',
+        142 => 'Signal raised by alarm',
+        143 => 'Termination (request to terminate)',
+        // 144 - not defined
+        145 => 'Child process terminated, stopped (or continued*)',
+        146 => 'Continue if stopped',
+        147 => 'Stop executing temporarily',
+        148 => 'Terminal stop signal',
+        149 => 'Background process attempting to read from tty ("in")',
+        150 => 'Background process attempting to write to tty ("out")',
+        151 => 'Urgent data available on socket',
+        152 => 'CPU time limit exceeded',
+        153 => 'File size limit exceeded',
+        154 => 'Signal raised by timer counting virtual time: "virtual timer expired"',
+        155 => 'Profiling timer expired',
+        // 156 - not defined
+        157 => 'Pollable event',
+        // 158 - not defined
+        159 => 'Bad syscall',
+    );
 
     /**
      * Constructor.
      *
      * @param string  $commandline The command line to run
      * @param string  $cwd         The working directory
-     * @param array   $env         The environment variables
+     * @param array   $env         The environment variables or null to inherit
      * @param string  $stdin       The STDIN content
      * @param integer $timeout     The timeout in seconds
      * @param array   $options     An array of options for proc_open
@@ -64,7 +116,8 @@ class Process
         }
         $this->stdin = $stdin;
         $this->timeout = $timeout;
-        $this->options = array_merge(array('suppress_errors' => true, 'binary_pipes' => true, 'bypass_shell' => false), $options);
+        $this->enhanceWindowsCompatibility = true;
+        $this->options = array_replace(array('suppress_errors' => true, 'binary_pipes' => true), $options);
     }
 
     /**
@@ -91,9 +144,11 @@ class Process
         $this->stdout = '';
         $this->stderr = '';
         $that = $this;
-        $callback = function ($type, $data) use ($that, $callback)
+        $out = self::OUT;
+        $err = self::ERR;
+        $callback = function ($type, $data) use ($that, $callback, $out, $err)
         {
-            if ('out' == $type) {
+            if ($out == $type) {
                 $that->addOutput($data);
             } else {
                 $that->addErrorOutput($data);
@@ -106,7 +161,16 @@ class Process
 
         $descriptors = array(array('pipe', 'r'), array('pipe', 'w'), array('pipe', 'w'));
 
-        $process = proc_open($this->commandline, $descriptors, $pipes, $this->cwd, $this->env, $this->options);
+        $commandline = $this->commandline;
+
+        if (defined('PHP_WINDOWS_VERSION_BUILD') && $this->enhanceWindowsCompatibility) {
+            $commandline = 'cmd /V:ON /E:ON /C "'.$commandline.'"';
+            if (!isset($this->options['bypass_shell'])) {
+                $this->options['bypass_shell'] = true;
+            }
+        }
+
+        $process = proc_open($commandline, $descriptors, $pipes, $this->cwd, $this->env, $this->options);
 
         if (!is_resource($process)) {
             throw new \RuntimeException('Unable to launch a new process.');
@@ -156,7 +220,7 @@ class Process
                 $type = array_search($pipe, $pipes);
                 $data = fread($pipe, 8192);
                 if (strlen($data) > 0) {
-                    call_user_func($callback, $type == 1 ? 'out' : 'err', $data);
+                    call_user_func($callback, $type == 1 ? $out : $err, $data);
                 }
                 if (false === $data || feof($pipe)) {
                     fclose($pipe);
@@ -223,6 +287,22 @@ class Process
     public function getExitCode()
     {
         return $this->exitcode;
+    }
+
+    /**
+     * Returns a string representation for the exit code returned by the process.
+     *
+     * This method relies on the Unix exit code status standardization
+     * and might not be relevant for other operating systems.
+     *
+     * @return string A string representation for the exit status code
+     *
+     * @see http://tldp.org/LDP/abs/html/exitcodes.html
+     * @see http://en.wikipedia.org/wiki/Unix_signal
+     */
+    public function getExitCodeText()
+    {
+        return isset(self::$exitCodes[$this->exitcode]) ? self::$exitCodes[$this->exitcode] : 'Unknown error';
     }
 
     /**
@@ -361,5 +441,15 @@ class Process
     public function setOptions(array $options)
     {
         $this->options = $options;
+    }
+
+    public function getEnhanceWindowsCompatibility()
+    {
+        return $this->enhanceWindowsCompatibility;
+    }
+
+    public function setEnhanceWindowsCompatibility($enhance)
+    {
+        $this->enhanceWindowsCompatibility = (Boolean) $enhance;
     }
 }

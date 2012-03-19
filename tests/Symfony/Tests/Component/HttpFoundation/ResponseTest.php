@@ -11,10 +11,20 @@
 
 namespace Symfony\Tests\Component\HttpFoundation;
 
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 class ResponseTest extends \PHPUnit_Framework_TestCase
 {
+    public function testCreate()
+    {
+        $response = Response::create('foo', 301, array('Foo' => 'bar'));
+
+        $this->assertInstanceOf('Symfony\Component\HttpFoundation\Response', $response);
+        $this->assertEquals(301, $response->getStatusCode());
+        $this->assertEquals('bar', $response->headers->get('foo'));
+    }
+
     public function testIsValidateable()
     {
         $response = new Response('', 200, array('Last-Modified' => $this->createDateTimeOneHourAgo()->format(DATE_RFC2822)));
@@ -182,24 +192,15 @@ class ResponseTest extends \PHPUnit_Framework_TestCase
         $headerMock = $this->getMock('Symfony\Component\HttpFoundation\ResponseHeaderBag', array('set'));
         $headerMock->expects($this->at(0))
             ->method('set')
-            ->with('Content-Type', 'text/html; charset=UTF-8');
+            ->with('Content-Type', 'text/html');
         $headerMock->expects($this->at(1))
             ->method('set')
-            ->with('Content-Length', '3');
-        $headerMock->expects($this->at(2))
-            ->method('set')
-            ->with('Content-Type', 'text/html; charset=Foo');
+            ->with('Content-Type', 'text/html; charset=UTF-8');
 
         $response = new Response('foo');
         $response->headers = $headerMock;
 
-        // verify first set()
-        $response->__toString();
-
-        $response->headers->remove('Content-Type');
-        $response->setCharset('Foo');
-        // verify second set()
-        $response->__toString();
+        $response->prepare(new Request());
     }
 
     public function testContentTypeCharset()
@@ -208,9 +209,49 @@ class ResponseTest extends \PHPUnit_Framework_TestCase
         $response->headers->set('Content-Type', 'text/css');
 
         // force fixContentType() to be called
-        $response->__toString();
+        $response->prepare(new Request());
 
         $this->assertEquals('text/css; charset=UTF-8', $response->headers->get('Content-Type'));
+    }
+
+    public function testPrepareDoesNothingIfContentTypeIsSet()
+    {
+        $response = new Response('foo');
+        $response->headers->set('Content-Type', 'text/plain');
+
+        $response->prepare(new Request());
+
+        $this->assertEquals('text/plain; charset=UTF-8', $response->headers->get('content-type'));
+    }
+
+    public function testPrepareDoesNothingIfRequestFormatIsNotDefined()
+    {
+        $response = new Response('foo');
+
+        $response->prepare(new Request());
+
+        $this->assertEquals('text/html; charset=UTF-8', $response->headers->get('content-type'));
+    }
+
+    public function testPrepareSetContentType()
+    {
+        $response = new Response('foo');
+        $request = Request::create('/');
+        $request->setRequestFormat('json');
+
+        $response->prepare($request);
+
+        $this->assertEquals('application/json', $response->headers->get('content-type'));
+    }
+
+    public function testPrepareRemovesContentForHeadRequests()
+    {
+        $response = new Response('foo');
+        $request = Request::create('/', 'HEAD');
+
+        $response->prepare($request);
+
+        $this->assertEquals('', $response->getContent());
     }
 
     public function testSetCache()
@@ -222,6 +263,7 @@ class ResponseTest extends \PHPUnit_Framework_TestCase
             $this->fail('->setCache() throws an InvalidArgumentException if an option is not supported');
         } catch (\Exception $e) {
             $this->assertInstanceOf('InvalidArgumentException', $e, '->setCache() throws an InvalidArgumentException if an option is not supported');
+            $this->assertContains('"wrong option"', $e->getMessage());
         }
 
         $options = array('etag' => '"whatever"');
@@ -445,6 +487,28 @@ class ResponseTest extends \PHPUnit_Framework_TestCase
     {
         $response = new Response();
         $response->setContent($content);
+    }
+
+    public function testSettersAreChainable()
+    {
+        $response = new Response();
+
+        $setters = array(
+            'setProtocolVersion' => '1.0',
+            'setCharset' => 'UTF-8',
+            'setPublic' => null,
+            'setPrivate' => null,
+            'setDate' => new \DateTime,
+            'expire' => null,
+            'setMaxAge' => 1,
+            'setSharedMaxAge' => 1,
+            'setTtl' => 1,
+            'setClientTtl' => 1,
+        );
+
+        foreach ($setters as $setter => $arg) {
+            $this->assertEquals($response, $response->{$setter}($arg));
+        }
     }
 
     public function validContentProvider()

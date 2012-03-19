@@ -41,7 +41,14 @@ class RequestDataCollector extends DataCollector
 
         $attributes = array();
         foreach ($request->attributes->all() as $key => $value) {
-            $attributes[$key] = is_object($value) ? sprintf('Object(%s)', get_class($value)) : $value;
+            if (is_object($value)) {
+                $attributes[$key] = sprintf('Object(%s)', get_class($value));
+                if (is_callable(array($value, '__toString'))) {
+                    $attributes[$key] .= sprintf(' = %s', (string) $value);
+                }
+            } else {
+                $attributes[$key] = $value;
+            }
         }
 
         $content = null;
@@ -64,8 +71,15 @@ class RequestDataCollector extends DataCollector
             'request_cookies'    => $request->cookies->all(),
             'request_attributes' => $attributes,
             'response_headers'   => $responseHeaders,
-            'session_attributes' => $request->hasSession() ? $request->getSession()->getAttributes() : array(),
+            'session_attributes' => $request->hasSession() ? $request->getSession()->all() : array(),
+            'flashes'            => $request->hasSession() ? $request->getSession()->getFlashBag()->peekAll() : array(),
+            'path_info'          => $request->getPathInfo(),
         );
+    }
+
+    public function getPathInfo()
+    {
+        return $this->data['path_info'];
     }
 
     public function getRequestRequest()
@@ -106,6 +120,11 @@ class RequestDataCollector extends DataCollector
     public function getSessionAttributes()
     {
         return $this->data['session_attributes'];
+    }
+
+    public function getFlashes()
+    {
+        return $this->data['flashes'];
     }
 
     public function getContent()

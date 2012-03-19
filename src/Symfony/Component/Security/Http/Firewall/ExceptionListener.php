@@ -16,10 +16,11 @@ use Symfony\Component\Security\Http\Authorization\AccessDeniedHandlerInterface;
 use Symfony\Component\Security\Core\SecurityContextInterface;
 use Symfony\Component\Security\Core\Authentication\AuthenticationTrustResolverInterface;
 use Symfony\Component\Security\Http\EntryPoint\AuthenticationEntryPointInterface;
+use Symfony\Component\Security\Core\Exception\AccountStatusException;
 use Symfony\Component\Security\Core\Exception\AuthenticationException;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
-use Symfony\Component\Security\Core\Authentication\Token\AnonymousToken;
 use Symfony\Component\Security\Core\Exception\InsufficientAuthenticationException;
+use Symfony\Component\Security\Core\Exception\LogoutException;
 use Symfony\Component\Security\Http\HttpUtils;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpKernel\Log\LoggerInterface;
@@ -75,6 +76,11 @@ class ExceptionListener
     {
         $exception = $event->getException();
         $request = $event->getRequest();
+
+        // determine the actual cause for the exception
+        while (null !== $previous = $exception->getPrevious()) {
+            $exception = $previous;
+        }
 
         if ($exception instanceof AuthenticationException) {
             if (null !== $this->logger) {
@@ -135,6 +141,14 @@ class ExceptionListener
                     return;
                 }
             }
+        } elseif ($exception instanceof LogoutException) {
+            if (null !== $this->logger) {
+                $this->logger->info(sprintf('Logout exception occurred; wrapping with AccessDeniedHttpException (%s)', $exception->getMessage()));
+            }
+
+            $event->setException(new AccessDeniedHttpException($exception->getMessage(), $exception));
+
+            return;
         } else {
             return;
         }
@@ -152,11 +166,21 @@ class ExceptionListener
             $this->logger->debug('Calling Authentication entry point');
         }
 
+        $this->setTargetPath($request);
+
+        if ($authException instanceof AccountStatusException) {
+            // remove the security token to prevent infinite redirect loops
+            $this->context->setToken(null);
+        }
+
+        return $this->authenticationEntryPoint->start($request, $authException);
+    }
+
+    protected function setTargetPath(Request $request)
+    {
         // session isn't required when using http basic authentication mechanism for example
         if ($request->hasSession()) {
             $request->getSession()->set('_security.target_path', $request->getUri());
         }
-
-        return $this->authenticationEntryPoint->start($request, $authException);
     }
 }

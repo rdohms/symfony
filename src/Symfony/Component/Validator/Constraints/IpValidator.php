@@ -20,11 +20,20 @@ use Symfony\Component\Validator\Exception\UnexpectedTypeException;
  *
  * @author Bernhard Schussek <bernhard.schussek@symfony.com>
  * @author Joseph Bielawski <stloyd@gmail.com>
+ *
+ * @api
  */
 class IpValidator extends ConstraintValidator
 {
     /**
-     * {@inheritDoc}
+     * Checks if the passed value is valid.
+     *
+     * @param mixed      $value      The value that should be validated
+     * @param Constraint $constraint The constraint for the validation
+     *
+     * @return Boolean Whether or not the value is valid
+     *
+     * @api
      */
     public function isValid($value, Constraint $constraint)
     {
@@ -89,7 +98,7 @@ class IpValidator extends ConstraintValidator
         }
 
         if (!filter_var($value, FILTER_VALIDATE_IP, $flag)) {
-            $this->setMessage($constraint->message, array('{{ value }}' => $value));
+            $this->context->addViolation($constraint->message, array('{{ value }}' => $value));
 
             return false;
         }

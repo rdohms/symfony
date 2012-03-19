@@ -32,7 +32,7 @@ class HelpCommand extends Command
      */
     protected function configure()
     {
-        $this->ignoreValidationErrors = true;
+        $this->ignoreValidationErrors();
 
         $this
             ->setDefinition(array(
@@ -44,11 +44,11 @@ class HelpCommand extends Command
             ->setHelp(<<<EOF
 The <info>help</info> command displays help for a given command:
 
-  <info>./app/console help list</info>
+  <info>php app/console help list</info>
 
 You can also output the help as XML by using the <comment>--xml</comment> option:
 
-  <info>./app/console help --xml list</info>
+  <info>php app/console help --xml list</info>
 EOF
             );
     }
@@ -77,5 +77,7 @@ EOF
         } else {
             $output->writeln($this->command->asText());
         }
+
+        $this->command = null;
     }
 }

@@ -1,5 +1,6 @@
 framework:
     secret: s3cr3t
+    default_locale: fr
     form: ~
     csrf_protection:
         enabled:    true
@@ -13,8 +14,8 @@ framework:
         type:         xml
     session:
         auto_start:     true
-        default_locale: fr
         storage_id:     session.storage.native
+        handler_id:     session.handler.native_file
         name:           _SYMFONY
         lifetime:       86400
         path:           /
@@ -47,3 +48,4 @@ framework:
         cache:   file
         debug:   true
         file_cache_dir: %kernel.cache_dir%/annotations
+    ide: file%%link%%format

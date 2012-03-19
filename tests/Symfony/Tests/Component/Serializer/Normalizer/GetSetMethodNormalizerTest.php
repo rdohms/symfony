@@ -3,7 +3,6 @@
 namespace Symfony\Tests\Component\Serializer\Normalizer;
 
 use Symfony\Component\Serializer\Normalizer\GetSetMethodNormalizer;
-use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 
 /*
  * This file is part of the Symfony framework.
@@ -28,7 +27,7 @@ class GetSetMethodNormalizerTest extends \PHPUnit_Framework_TestCase
         $obj->setFoo('foo');
         $obj->setBar('bar');
         $this->assertEquals(
-            array('foo' => 'foo', 'bar' => 'bar', 'foobar' => 'foobar'),
+            array('foo' => 'foo', 'bar' => 'bar', 'fooBar' => 'foobar'),
             $this->normalizer->normalize($obj, 'any')
         );
     }
@@ -36,7 +35,7 @@ class GetSetMethodNormalizerTest extends \PHPUnit_Framework_TestCase
     public function testDenormalize()
     {
         $obj = $this->normalizer->denormalize(
-            array('foo' => 'foo', 'bar' => 'bar', 'foobar' => 'foobar'),
+            array('foo' => 'foo', 'bar' => 'bar', 'fooBar' => 'foobar'),
             __NAMESPACE__.'\GetSetDummy',
             'any'
         );
@@ -47,7 +46,7 @@ class GetSetMethodNormalizerTest extends \PHPUnit_Framework_TestCase
     public function testConstructorDenormalize()
     {
         $obj = $this->normalizer->denormalize(
-            array('foo' => 'foo', 'bar' => 'bar', 'foobar' => 'foobar'),
+            array('foo' => 'foo', 'bar' => 'bar', 'fooBar' => 'foobar'),
             __NAMESPACE__.'\GetConstructorDummy', 'any');
         $this->assertEquals('foo', $obj->getFoo());
         $this->assertEquals('bar', $obj->getBar());

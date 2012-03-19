@@ -15,10 +15,23 @@ use Symfony\Component\Validator\Constraint;
 use Symfony\Component\Validator\ConstraintValidator;
 use Symfony\Component\Validator\Exception\UnexpectedTypeException;
 
+/**
+ * @api
+ */
 class DateValidator extends ConstraintValidator
 {
     const PATTERN = '/^(\d{4})-(\d{2})-(\d{2})$/';
 
+    /**
+     * Checks if the passed value is valid.
+     *
+     * @param mixed      $value      The value that should be validated
+     * @param Constraint $constraint The constraint for the validation
+     *
+     * @return Boolean Whether or not the value is valid
+     *
+     * @api
+     */
     public function isValid($value, Constraint $constraint)
     {
         if (null === $value || '' === $value) {
@@ -35,12 +48,12 @@ class DateValidator extends ConstraintValidator
 
         $value = (string) $value;
 
-        if (!preg_match(static::PATTERN, $value, $matches)) {
-            $this->setMessage($constraint->message, array('{{ value }}' => $value));
+        if (!preg_match(static::PATTERN, $value, $matches) || !checkdate($matches[2], $matches[3], $matches[1])) {
+            $this->context->addViolation($constraint->message, array('{{ value }}' => $value));
 
             return false;
         }
 
-        return checkdate($matches[2], $matches[3], $matches[1]);
+        return true;
     }
 }

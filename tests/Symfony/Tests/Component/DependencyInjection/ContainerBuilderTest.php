@@ -174,7 +174,7 @@ class ContainerBuilderTest extends \PHPUnit_Framework_TestCase
 
         $builder->set('foobar', 'stdClass');
         $builder->set('moo', 'stdClass');
-        $this->assertEquals(0, count($builder->getAliases()), '->getAliases() does not return aliased services that have been overridden');
+        $this->assertCount(0, $builder->getAliases(), '->getAliases() does not return aliased services that have been overridden');
     }
 
     /**
@@ -430,6 +430,8 @@ class ContainerBuilderTest extends \PHPUnit_Framework_TestCase
             }
         }
         $this->assertEquals(array($a, $b), $resources, '->getResources() returns an array of resources read for the current configuration');
+        $this->assertSame($container, $container->setResources(array()));
+        $this->assertEquals(array(), $container->getResources());
     }
 
     /**

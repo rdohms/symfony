@@ -50,7 +50,7 @@ class DumperTest extends \PHPUnit_Framework_TestCase
                 $test = $this->parser->parse($yaml);
                 if (isset($test['dump_skip']) && $test['dump_skip']) {
                     continue;
-                } else if (isset($test['todo']) && $test['todo']) {
+                } elseif (isset($test['todo']) && $test['todo']) {
                     // TODO
                 } else {
                     $expected = eval('return '.trim($test['php']).';');
@@ -100,12 +100,12 @@ EOF;
 foo: '#bar'
 'foo''bar': {  }
 bar:
-  - 1
-  - foo
+    - 1
+    - foo
 foobar:
-  foo: bar
-  bar: [1, foo]
-  foobar: { foo: bar, bar: [1, foo] }
+    foo: bar
+    bar: [1, foo]
+    foobar: { foo: bar, bar: [1, foo] }
 
 EOF;
         $this->assertEquals($expected, $this->dumper->dump($array, 2), '->dump() takes an inline level argument');
@@ -115,16 +115,16 @@ EOF;
 foo: '#bar'
 'foo''bar': {  }
 bar:
-  - 1
-  - foo
-foobar:
-  foo: bar
-  bar:
     - 1
     - foo
-  foobar:
+foobar:
     foo: bar
-    bar: [1, foo]
+    bar:
+        - 1
+        - foo
+    foobar:
+        foo: bar
+        bar: [1, foo]
 
 EOF;
         $this->assertEquals($expected, $this->dumper->dump($array, 3), '->dump() takes an inline level argument');
@@ -134,18 +134,18 @@ EOF;
 foo: '#bar'
 'foo''bar': {  }
 bar:
-  - 1
-  - foo
-foobar:
-  foo: bar
-  bar:
     - 1
     - foo
-  foobar:
+foobar:
     foo: bar
     bar:
-      - 1
-      - foo
+        - 1
+        - foo
+    foobar:
+        foo: bar
+        bar:
+            - 1
+            - foo
 
 EOF;
         $this->assertEquals($expected, $this->dumper->dump($array, 4), '->dump() takes an inline level argument');

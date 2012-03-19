@@ -37,6 +37,25 @@ class UniversalClassLoaderTest extends \PHPUnit_Framework_TestCase
         );
     }
 
+    public function testUseIncludePath()
+    {
+        $loader = new UniversalClassLoader();
+        $this->assertFalse($loader->getUseIncludePath());
+
+        $this->assertEquals(null, $loader->findFile('Foo'));
+
+        $includePath = get_include_path();
+
+        $loader->useIncludePath(true);
+        $this->assertTrue($loader->getUseIncludePath());
+
+        set_include_path(__DIR__.'/Fixtures/includepath' . PATH_SEPARATOR . $includePath);
+
+        $this->assertEquals(__DIR__.DIRECTORY_SEPARATOR.'Fixtures'.DIRECTORY_SEPARATOR.'includepath'.DIRECTORY_SEPARATOR.'Foo.php', $loader->findFile('Foo'));
+
+        set_include_path($includePath);
+    }
+
     /**
      * @dataProvider getLoadClassFromFallbackTests
      */
@@ -59,6 +78,20 @@ class UniversalClassLoaderTest extends \PHPUnit_Framework_TestCase
             array('\\Namespaced\\FooBar', 'Namespaced\\FooBar', '->loadClass() loads Namespaced\Baz class from fallback dir'),
             array('\\Pearlike_FooBar',    'Pearlike_FooBar',    '->loadClass() loads Pearlike_Baz class from fallback dir'),
         );
+    }
+
+    public function testRegisterPrefixFallback()
+    {
+        $loader = new UniversalClassLoader();
+        $loader->registerPrefixFallback(__DIR__.DIRECTORY_SEPARATOR.'Fixtures/fallback');
+        $this->assertEquals(array(__DIR__.DIRECTORY_SEPARATOR.'Fixtures/fallback'), $loader->getPrefixFallbacks());
+    }
+
+    public function testRegisterNamespaceFallback()
+    {
+        $loader = new UniversalClassLoader();
+        $loader->registerNamespaceFallback(__DIR__.DIRECTORY_SEPARATOR.'Fixtures/Namespaced/fallback');
+        $this->assertEquals(array(__DIR__.DIRECTORY_SEPARATOR.'Fixtures/Namespaced/fallback'), $loader->getNamespaceFallbacks());
     }
 
     /**

@@ -16,32 +16,43 @@ use Symfony\Component\Validator\Constraints\UrlValidator;
 
 class UrlValidatorTest extends \PHPUnit_Framework_TestCase
 {
+    protected $context;
     protected $validator;
 
     protected function setUp()
     {
+        $this->context = $this->getMock('Symfony\Component\Validator\ExecutionContext', array(), array(), '', false);
         $this->validator = new UrlValidator();
+        $this->validator->initialize($this->context);
     }
 
     protected function tearDown()
     {
+        $this->context = null;
         $this->validator = null;
     }
 
     public function testNullIsValid()
     {
+        $this->context->expects($this->never())
+            ->method('addViolation');
+
         $this->assertTrue($this->validator->isValid(null, new Url()));
     }
 
     public function testEmptyStringIsValid()
     {
+        $this->context->expects($this->never())
+            ->method('addViolation');
+
         $this->assertTrue($this->validator->isValid('', new Url()));
     }
 
+    /**
+     * @expectedException Symfony\Component\Validator\Exception\UnexpectedTypeException
+     */
     public function testExpectsStringCompatibleType()
     {
-        $this->setExpectedException('Symfony\Component\Validator\Exception\UnexpectedTypeException');
-
         $this->validator->isValid(new \stdClass(), new Url());
     }
 
@@ -50,6 +61,9 @@ class UrlValidatorTest extends \PHPUnit_Framework_TestCase
      */
     public function testValidUrls($url)
     {
+        $this->context->expects($this->never())
+            ->method('addViolation');
+
         $this->assertTrue($this->validator->isValid($url, new Url()));
     }
 
@@ -65,7 +79,10 @@ class UrlValidatorTest extends \PHPUnit_Framework_TestCase
             array('http://www.test-example.com/'),
             array('http://www.symfony.com/'),
             array('http://symfony.fake/blog/'),
+            array('http://symfony.com/?'),
             array('http://symfony.com/search?type=&q=url+validator'),
+            array('http://symfony.com/#'),
+            array('http://symfony.com/#?'),
             array('http://www.symfony.com/doc/current/book/validation.html#supported-constraints'),
             array('http://very.long.domain.name.com/'),
             array('http://127.0.0.1/'),
@@ -92,7 +109,17 @@ class UrlValidatorTest extends \PHPUnit_Framework_TestCase
      */
     public function testInvalidUrls($url)
     {
-        $this->assertFalse($this->validator->isValid($url, new Url()));
+        $constraint = new Url(array(
+            'message' => 'myMessage'
+        ));
+
+        $this->context->expects($this->once())
+            ->method('addViolation')
+            ->with('myMessage', array(
+                '{{ value }}' => $url,
+            ));
+
+        $this->assertFalse($this->validator->isValid($url, $constraint));
     }
 
     public function getInvalidUrls()
@@ -105,6 +132,8 @@ class UrlValidatorTest extends \PHPUnit_Framework_TestCase
             array('http://goog_le.com'),
             array('http://google.com::aa'),
             array('http://google.com:aa'),
+            array('http://symfony.com?'),
+            array('http://symfony.com#'),
             array('ftp://google.fr'),
             array('faked://google.fr'),
             array('http://127.0.0.1:aa/'),
@@ -118,6 +147,9 @@ class UrlValidatorTest extends \PHPUnit_Framework_TestCase
      */
     public function testCustomProtocolIsValid($url)
     {
+        $this->context->expects($this->never())
+            ->method('addViolation');
+
         $constraint = new Url(array(
             'protocols' => array('ftp', 'file', 'git')
         ));
@@ -132,18 +164,5 @@ class UrlValidatorTest extends \PHPUnit_Framework_TestCase
             array('file://127.0.0.1'),
             array('git://[::1]/'),
         );
-    }
-
-    public function testMessageIsSet()
-    {
-        $constraint = new Url(array(
-            'message' => 'myMessage'
-        ));
-
-        $this->assertFalse($this->validator->isValid('foobar', $constraint));
-        $this->assertEquals($this->validator->getMessageTemplate(), 'myMessage');
-        $this->assertEquals($this->validator->getMessageParameters(), array(
-            '{{ value }}' => 'foobar',
-        ));
     }
 }

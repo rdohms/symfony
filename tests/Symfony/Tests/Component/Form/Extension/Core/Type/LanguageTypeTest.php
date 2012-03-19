@@ -11,10 +11,9 @@
 
 namespace Symfony\Tests\Component\Form\Extension\Core\Type;
 
-use Symfony\Component\Form\LanguageField;
-use Symfony\Component\Form\FormView;
+use Symfony\Component\Form\Extension\Core\View\ChoiceView;
 
-class LanguageTypeTest extends TypeTestCase
+class LanguageTypeTest extends LocalizedTestCase
 {
     public function testCountriesAreSelectable()
     {
@@ -23,17 +22,13 @@ class LanguageTypeTest extends TypeTestCase
         $form = $this->factory->create('language');
         $view = $form->createView();
         $choices = $view->get('choices');
+        $labels = $view->get('choice_labels');
 
-        $this->assertArrayHasKey('en', $choices);
-        $this->assertEquals('Englisch', $choices['en']);
-        $this->assertArrayHasKey('en_GB', $choices);
-        $this->assertEquals('Britisches Englisch', $choices['en_GB']);
-        $this->assertArrayHasKey('en_US', $choices);
-        $this->assertEquals('Amerikanisches Englisch', $choices['en_US']);
-        $this->assertArrayHasKey('fr', $choices);
-        $this->assertEquals('Französisch', $choices['fr']);
-        $this->assertArrayHasKey('my', $choices);
-        $this->assertEquals('Birmanisch', $choices['my']);
+        $this->assertContains(new ChoiceView('en', 'Englisch'), $choices, '', false, false);
+        $this->assertContains(new ChoiceView('en_GB', 'Britisches Englisch'), $choices, '', false, false);
+        $this->assertContains(new ChoiceView('en_US', 'Amerikanisches Englisch'), $choices, '', false, false);
+        $this->assertContains(new ChoiceView('fr', 'Französisch'), $choices, '', false, false);
+        $this->assertContains(new ChoiceView('my', 'Birmanisch'), $choices, '', false, false);
     }
 
     public function testMultipleLanguagesIsNotIncluded()
@@ -42,6 +37,6 @@ class LanguageTypeTest extends TypeTestCase
         $view = $form->createView();
         $choices = $view->get('choices');
 
-        $this->assertArrayNotHasKey('mul', $choices);
+        $this->assertNotContains(new ChoiceView('mul', 'Mehrsprachig'), $choices, '', false, false);
     }
 }

@@ -2,6 +2,7 @@
 
 $container->loadFromExtension('framework', array(
     'secret' => 's3cr3t',
+    'default_locale' => 'fr',
     'form' => null,
     'csrf_protection' => array(
         'enabled'    => true,
@@ -19,8 +20,8 @@ $container->loadFromExtension('framework', array(
     ),
     'session' => array(
         'auto_start'     => true,
-        'default_locale' => 'fr',
         'storage_id'     => 'session.storage.native',
+        'handler_id'     => 'session.handler.native_file',
         'name'           => '_SYMFONY',
         'lifetime'       => 86400,
         'path'           => '/',
@@ -63,4 +64,5 @@ $container->loadFromExtension('framework', array(
         'debug' => true,
         'file_cache_dir' => '%kernel.cache_dir%/annotations',
     ),
+    'ide' => 'file%%link%%format'
 ));

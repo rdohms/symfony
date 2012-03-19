@@ -32,6 +32,12 @@ class Configuration implements ConfigurationInterface
         $treeBuilder = new TreeBuilder();
         $rootNode = $treeBuilder->root('twig');
 
+        $rootNode
+            ->children()
+                ->scalarNode('exception_controller')->defaultValue('Symfony\\Bundle\\TwigBundle\\Controller\\ExceptionController::showAction')->end()
+            ->end()
+        ;
+
         $this->addFormSection($rootNode);
         $this->addGlobalsSection($rootNode);
         $this->addTwigOptions($rootNode);
@@ -48,15 +54,15 @@ class Configuration implements ConfigurationInterface
                     ->fixXmlConfig('resource')
                     ->children()
                         ->arrayNode('resources')
-                            ->addDefaultsIfNotSet()
-                            ->defaultValue(array('form_div_layout.html.twig'))
+                            ->addDefaultChildrenIfNoneSet()
+                            ->prototype('scalar')->defaultValue('form_div_layout.html.twig')->end()
+                            ->setExample(array('MyBundle::form.html.twig'))
                             ->validate()
                                 ->ifTrue(function($v) { return !in_array('form_div_layout.html.twig', $v); })
                                 ->then(function($v){
                                     return array_merge(array('form_div_layout.html.twig'), $v);
                                 })
                             ->end()
-                            ->prototype('scalar')->end()
                         ->end()
                     ->end()
                 ->end()
@@ -71,9 +77,10 @@ class Configuration implements ConfigurationInterface
             ->children()
                 ->arrayNode('globals')
                     ->useAttributeAsKey('key')
+                    ->setExample(array('foo' => '"@bar"', 'pi' => 3.14))
                     ->prototype('array')
                         ->beforeNormalization()
-                            ->ifTrue(function($v){ return is_string($v) && '@' === substr($v, 0, 1); })
+                            ->ifTrue(function($v){ return is_string($v) && 0 === strpos($v, '@'); })
                             ->then(function($v){ return array('id' => substr($v, 1), 'type' => 'service'); })
                         ->end()
                         ->beforeNormalization()
@@ -110,12 +117,13 @@ class Configuration implements ConfigurationInterface
         $rootNode
             ->children()
                 ->scalarNode('autoescape')->end()
-                ->scalarNode('base_template_class')->end()
+                ->scalarNode('base_template_class')->setExample('Twig_Template')->end()
                 ->scalarNode('cache')->defaultValue('%kernel.cache_dir%/twig')->end()
                 ->scalarNode('charset')->defaultValue('%kernel.charset%')->end()
                 ->scalarNode('debug')->defaultValue('%kernel.debug%')->end()
                 ->scalarNode('strict_variables')->end()
                 ->scalarNode('auto_reload')->end()
+                ->scalarNode('optimizations')->end()
             ->end()
         ;
     }

@@ -12,6 +12,8 @@
 namespace Symfony\Bundle\FrameworkBundle;
 
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 use Symfony\Component\HttpKernel\Controller\ControllerResolverInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -21,6 +23,7 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 /**
  * This HttpKernel is used to manage scope changes of the DI container.
  *
+ * @author Fabien Potencier <fabien@symfony.com>
  * @author Johannes M. Schmitt <schmittjoh@gmail.com>
  */
 class HttpKernel extends BaseHttpKernel
@@ -37,6 +40,8 @@ class HttpKernel extends BaseHttpKernel
 
     public function handle(Request $request, $type = HttpKernelInterface::MASTER_REQUEST, $catch = true)
     {
+        $request->headers->set('X-Php-Ob-Level', ob_get_level());
+
         $this->container->enterScope('request');
         $this->container->set('request', $request, 'request');
 
@@ -109,7 +114,7 @@ class HttpKernel extends BaseHttpKernel
             $this->esiSupport = $this->container->has('esi') && $this->container->get('esi')->hasSurrogateEsiCapability($this->container->get('request'));
         }
 
-        if ($this->esiSupport && $options['standalone']) {
+        if ($this->esiSupport && (true === $options['standalone'] || 'esi' === $options['standalone'])) {
             $uri = $this->generateInternalUri($controller, $options['attributes'], $options['query']);
 
             $alt = '';
@@ -120,19 +125,37 @@ class HttpKernel extends BaseHttpKernel
             return $this->container->get('esi')->renderIncludeTag($uri, $alt, $options['ignore_errors'], $options['comment']);
         }
 
+        if ('js' === $options['standalone']) {
+            $uri = $this->generateInternalUri($controller, $options['attributes'], $options['query'], false);
+            $defaultContent = null;
+
+            if ($template = $this->container->getParameter('templating.hinclude.default_template')) {
+                $defaultContent = $this->container->get('templating')->render($template);
+            }
+
+            return $this->renderHIncludeTag($uri, $defaultContent);
+        }
+
         $request = $this->container->get('request');
 
         // controller or URI?
         if (0 === strpos($controller, '/')) {
-            $subRequest = Request::create($controller, 'get', array(), $request->cookies->all(), array(), $request->server->all());
-            $subRequest->setSession($request->getSession());
+            $subRequest = Request::create($request->getUriForPath($controller), 'get', array(), $request->cookies->all(), array(), $request->server->all());
+            if ($session = $request->getSession()) {
+                $subRequest->setSession($session);
+            }
         } else {
             $options['attributes']['_controller'] = $controller;
-            $options['attributes']['_format'] = $request->getRequestFormat();
+
+            if (!isset($options['attributes']['_format'])) {
+                $options['attributes']['_format'] = $request->getRequestFormat();
+            }
+
             $options['attributes']['_route'] = '_internal';
             $subRequest = $request->duplicate($options['query'], null, $options['attributes']);
         }
 
+        $level = ob_get_level();
         try {
             $response = $this->handle($subRequest, HttpKernelInterface::SUB_REQUEST, false);
 
@@ -140,7 +163,11 @@ class HttpKernel extends BaseHttpKernel
                 throw new \RuntimeException(sprintf('Error when rendering "%s" (Status code is %s).', $request->getUri(), $response->getStatusCode()));
             }
 
-            return $response->getContent();
+            if (!$response instanceof StreamedResponse) {
+                return $response->getContent();
+            }
+
+            $response->sendContent();
         } catch (\Exception $e) {
             if ($options['alt']) {
                 $alt = $options['alt'];
@@ -153,6 +180,11 @@ class HttpKernel extends BaseHttpKernel
 
             if (!$options['ignore_errors']) {
                 throw $e;
+            }
+
+            // let's clean up the output buffers that were created by the sub-request
+            while (ob_get_level() > $level) {
+                ob_get_clean();
             }
         }
     }
@@ -168,22 +200,33 @@ class HttpKernel extends BaseHttpKernel
      *
      * @return string An internal URI
      */
-    public function generateInternalUri($controller, array $attributes = array(), array $query = array())
+    public function generateInternalUri($controller, array $attributes = array(), array $query = array(), $secure = true)
     {
         if (0 === strpos($controller, '/')) {
             return $controller;
         }
 
-        $uri = $this->container->get('router')->generate('_internal', array(
+        $path = http_build_query($attributes);
+        $uri = $this->container->get('router')->generate($secure ? '_internal' : '_internal_public', array(
             'controller' => $controller,
-            'path'       => $attributes ? http_build_query($attributes) : 'none',
+            'path'       => $path ?: 'none',
             '_format'    => $this->container->get('request')->getRequestFormat(),
         ));
 
-        if ($query) {
-            $uri = $uri.'?'.http_build_query($query);
+        if ($queryString = http_build_query($query)) {
+            $uri .= '?'.$queryString;
         }
 
         return $uri;
+    }
+
+    /**
+     * Renders an HInclude tag.
+     *
+     * @param string $uri A URI
+     */
+    public function renderHIncludeTag($uri, $defaultContent = null)
+    {
+        return sprintf('<hx:include src="%s">%s</hx:include>', $uri, $defaultContent);
     }
 }

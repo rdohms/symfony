@@ -53,13 +53,14 @@ abstract class AbstractAuthenticationListener implements ListenerInterface
     protected $logger;
     protected $authenticationManager;
     protected $providerKey;
+    protected $httpUtils;
+
     private $securityContext;
     private $sessionStrategy;
     private $dispatcher;
     private $successHandler;
     private $failureHandler;
     private $rememberMeServices;
-    private $httpUtils;
 
     /**
      * Constructor.
@@ -126,24 +127,24 @@ abstract class AbstractAuthenticationListener implements ListenerInterface
             return;
         }
 
+        if (!$request->hasSession()) {
+            throw new \RuntimeException('This authentication method requires a session.');
+        }
+
         try {
-            if (null === $returnValue = $this->attemptAuthentication($request)) {
-                return;
-            }
-
-            if (!$request->hasSession()) {
-                throw new \RuntimeException('This authentication method requires a session.');
-            }
-
             if (!$request->hasPreviousSession()) {
                 throw new SessionUnavailableException('Your session has timed-out, or you have disabled cookies.');
+            }
+
+            if (null === $returnValue = $this->attemptAuthentication($request)) {
+                return;
             }
 
             if ($returnValue instanceof TokenInterface) {
                 $this->sessionStrategy->onAuthentication($request, $returnValue);
 
                 $response = $this->onSuccess($event, $request, $returnValue);
-            } else if ($returnValue instanceof Response) {
+            } elseif ($returnValue instanceof Response) {
                 $response = $returnValue;
             } else {
                 throw new \RuntimeException('attemptAuthentication() must either return a Response, an implementation of TokenInterface, or null.');
@@ -191,7 +192,9 @@ abstract class AbstractAuthenticationListener implements ListenerInterface
         $this->securityContext->setToken(null);
 
         if (null !== $this->failureHandler) {
-            return $this->failureHandler->onAuthenticationFailure($request, $failed);
+            if (null !== $response = $this->failureHandler->onAuthenticationFailure($request, $failed)) {
+                return $response;
+            }
         }
 
         if (null === $this->options['failure_path']) {
@@ -235,9 +238,11 @@ abstract class AbstractAuthenticationListener implements ListenerInterface
             $this->dispatcher->dispatch(SecurityEvents::INTERACTIVE_LOGIN, $loginEvent);
         }
 
+        $response = null;
         if (null !== $this->successHandler) {
             $response = $this->successHandler->onAuthenticationSuccess($request, $token);
-        } else {
+        }
+        if (null === $response) {
             $response = $this->httpUtils->createRedirectResponse($request, $this->determineTargetUrl($request));
         }
 
@@ -272,7 +277,7 @@ abstract class AbstractAuthenticationListener implements ListenerInterface
             return $targetUrl;
         }
 
-        if ($this->options['use_referer'] && $targetUrl = $request->headers->get('Referer')) {
+        if ($this->options['use_referer'] && ($targetUrl = $request->headers->get('Referer')) && $targetUrl !== $request->getUriForPath($this->options['login_path'])) {
             return $targetUrl;
         }
 

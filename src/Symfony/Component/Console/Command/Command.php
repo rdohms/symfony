@@ -68,6 +68,16 @@ class Command
     }
 
     /**
+     * Ignores validation errors.
+     *
+     * This is mainly useful for the help command.
+     */
+    public function ignoreValidationErrors()
+    {
+        $this->ignoreValidationErrors = true;
+    }
+
+    /**
      * Sets the application instance for this command.
      *
      * @param Application $application An Application instance
@@ -114,6 +124,19 @@ class Command
     public function getApplication()
     {
         return $this->application;
+    }
+
+    /**
+     * Checks whether the command is enabled or not in the current environment
+     *
+     * Override this to check for x or y and return false if the command can not
+     * run properly under the current conditions.
+     *
+     * @return Boolean
+     */
+    public function isEnabled()
+    {
+        return true;
     }
 
     /**
@@ -244,10 +267,9 @@ class Command
             return;
         }
 
-        $this->definition->setArguments(array_merge(
-            $this->application->getDefinition()->getArguments(),
-            $this->definition->getArguments()
-        ));
+        $currentArguments = $this->definition->getArguments();
+        $this->definition->setArguments($this->application->getDefinition()->getArguments());
+        $this->definition->addArguments($currentArguments);
 
         $this->definition->addOptions($this->application->getDefinition()->getOptions());
 
@@ -257,7 +279,7 @@ class Command
     /**
      * Sets an array of argument and option instances.
      *
-     * @param array|Definition $definition An array of argument and option instances or a definition instance
+     * @param array|InputDefinition $definition An array of argument and option instances or a definition instance
      *
      * @return Command The current instance
      *
@@ -289,6 +311,19 @@ class Command
     }
 
     /**
+     * Gets the InputDefinition to be used to create XML and Text representations of this Command.
+     *
+     * Can be overridden to provide the original command representation when it would otherwise
+     * be changed by merging with the application InputDefinition.
+     *
+     * @return InputDefinition An InputDefinition instance
+     */
+    protected function getNativeDefinition()
+    {
+        return $this->getDefinition();
+    }
+
+    /**
      * Adds an argument.
      *
      * @param string  $name        The argument name
@@ -314,7 +349,7 @@ class Command
      * @param string  $shortcut    The shortcut (can be null)
      * @param integer $mode        The option mode: One of the InputOption::VALUE_* constants
      * @param string  $description A description text
-     * @param mixed   $default     The default value (must be null for InputOption::VALUE_REQUIRED or self::VALUE_NONE)
+     * @param mixed   $default     The default value (must be null for InputOption::VALUE_REQUIRED or InputOption::VALUE_NONE)
      *
      * @return Command The current instance
      *
@@ -521,7 +556,7 @@ class Command
             $messages[] = '<comment>Aliases:</comment> <info>'.implode(', ', $this->getAliases()).'</info>';
         }
 
-        $messages[] = $this->definition->asText();
+        $messages[] = $this->getNativeDefinition()->asText();
 
         if ($help = $this->getProcessedHelp()) {
             $messages[] = '<comment>Help:</comment>';
@@ -562,7 +597,7 @@ class Command
             $aliasXML->appendChild($dom->createTextNode($alias));
         }
 
-        $definition = $this->definition->asXml(true);
+        $definition = $this->getNativeDefinition()->asXml(true);
         $commandXML->appendChild($dom->importNode($definition->getElementsByTagName('arguments')->item(0), true));
         $commandXML->appendChild($dom->importNode($definition->getElementsByTagName('options')->item(0), true));
 

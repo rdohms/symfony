@@ -69,6 +69,13 @@ class InputOptionTest extends \PHPUnit_Framework_TestCase
             $this->assertInstanceOf('\Exception', $e, '__construct() throws an Exception if the mode is not valid');
             $this->assertEquals('Option mode "ANOTHER_ONE" is not valid.', $e->getMessage());
         }
+        try {
+            $option = new InputOption('foo', 'f', -1);
+            $this->fail('__construct() throws an Exception if the mode is not valid');
+        } catch (\Exception $e) {
+            $this->assertInstanceOf('\Exception', $e, '__construct() throws an Exception if the mode is not valid');
+            $this->assertEquals('Option mode "-1" is not valid.', $e->getMessage());
+        }
     }
 
     public function testIsArray()
@@ -132,5 +139,28 @@ class InputOptionTest extends \PHPUnit_Framework_TestCase
             $this->assertInstanceOf('\Exception', $e, '->setDefault() throws an Exception if you give a default value which is not an array for a VALUE_IS_ARRAY option');
             $this->assertEquals('A default value for an array option must be an array.', $e->getMessage());
         }
+    }
+
+    public function testEquals()
+    {
+        $option = new InputOption('foo', 'f', null, 'Some description');
+        $option2 = new InputOption('foo', 'f', null, 'Alternative description');
+        $this->assertTrue($option->equals($option2));
+
+        $option = new InputOption('foo', 'f', InputOption::VALUE_OPTIONAL, 'Some description');
+        $option2 = new InputOption('foo', 'f', InputOption::VALUE_OPTIONAL, 'Some description', true);
+        $this->assertFalse($option->equals($option2));
+
+        $option = new InputOption('foo', 'f', null, 'Some description');
+        $option2 = new InputOption('bar', 'f', null, 'Some description');
+        $this->assertFalse($option->equals($option2));
+
+        $option = new InputOption('foo', 'f', null, 'Some description');
+        $option2 = new InputOption('foo', '', null, 'Some description');
+        $this->assertFalse($option->equals($option2));
+
+        $option = new InputOption('foo', 'f', null, 'Some description');
+        $option2 = new InputOption('foo', 'f', InputOption::VALUE_OPTIONAL, 'Some description');
+        $this->assertFalse($option->equals($option2));
     }
 }

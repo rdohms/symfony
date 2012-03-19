@@ -42,7 +42,7 @@ class ProcessTest extends \PHPUnit_Framework_TestCase
      */
     public function testProcessResponses($expected, $getter, $code)
     {
-        $p = new Process(sprintf('php -r \'%s\'', $code));
+        $p = new Process(sprintf('php -r %s', escapeshellarg($code)));
         $p->run();
 
         $this->assertSame($expected, $p->$getter());
@@ -55,7 +55,11 @@ class ProcessTest extends \PHPUnit_Framework_TestCase
      */
     public function testProcessPipes($expected, $code)
     {
-        $p = new Process(sprintf('php -r \'%s\'', $code));
+        if (strpos(PHP_OS, "WIN") === 0 && version_compare(phpversion(), "5.3.9", "<")) {
+            $this->markTestSkipped('Test hangs on Windows & PHP due to https://bugs.php.net/bug.php?id=60120 fixed in http://svn.php.net/viewvc?view=revision&revision=318366');
+        }
+
+        $p = new Process(sprintf('php -r %s', escapeshellarg($code)));
         $p->setStdin($expected);
         $p->run();
 
@@ -64,21 +68,32 @@ class ProcessTest extends \PHPUnit_Framework_TestCase
         $this->assertSame(0, $p->getExitCode());
     }
 
+    public function testExitCodeText()
+    {
+        $process = new Process('');
+        $r = new \ReflectionObject($process);
+        $p = $r->getProperty('exitcode');
+        $p->setAccessible(true);
+
+        $p->setValue($process, 2);
+        $this->assertEquals('Misuse of shell builtins', $process->getExitCodeText());
+    }
+
     public function responsesCodeProvider()
     {
         return array(
             //expected output / getter / code to execute
             //array(1,'getExitCode','exit(1);'),
             //array(true,'isSuccessful','exit();'),
-            array('output', 'getOutput', 'echo "output";'),
+            array('output', 'getOutput', 'echo \'output\';'),
         );
     }
 
     public function pipesCodeProvider()
     {
         $variations = array(
-            'fwrite(STDOUT, $in = file_get_contents("php://stdin")); fwrite(STDERR, $in);',
-            'include "' . __DIR__ . '/ProcessTestHelper.php";',
+            'fwrite(STDOUT, $in = file_get_contents(\'php://stdin\')); fwrite(STDERR, $in);',
+            'include \'' . __DIR__ . '/ProcessTestHelper.php\';',
         );
         $baseData = str_repeat('*', 1024);
 

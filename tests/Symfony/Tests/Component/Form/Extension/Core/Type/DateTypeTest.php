@@ -11,10 +11,9 @@
 
 namespace Symfony\Tests\Component\Form\Extension\Core\Type;
 
-require_once __DIR__ . '/LocalizedTestCase.php';
+use Symfony\Component\Form\Extension\Core\View\ChoiceView;
 
-use Symfony\Component\Form\DateField;
-use Symfony\Component\Form\FormView;
+require_once __DIR__ . '/LocalizedTestCase.php';
 
 class DateTypeTest extends LocalizedTestCase
 {
@@ -319,210 +318,106 @@ class DateTypeTest extends LocalizedTestCase
         $this->assertEquals('01.06.2010', $form->getClientData());
     }
 
-    public function testIsYearWithinRangeReturnsTrueIfWithin()
+    public function testYearsOption()
     {
-        $this->markTestIncomplete('Needs to be reimplemented using validators');
-
         $form = $this->factory->create('date', null, array(
-            'data_timezone' => 'UTC',
-            'user_timezone' => 'UTC',
-            'widget' => 'single_text',
             'years' => array(2010, 2011),
         ));
 
-        $form->bind('2.6.2010');
+        $view = $form->createView();
 
-        $this->assertTrue($form->isYearWithinRange());
+        $this->assertEquals(array(
+            2010 => new ChoiceView('2010', '2010'),
+            2011 => new ChoiceView('2011', '2011'),
+        ), $view->getChild('year')->get('choices'));
     }
 
-    public function testIsYearWithinRangeReturnsTrueIfEmpty()
+    public function testMonthsOption()
     {
-        $this->markTestIncomplete('Needs to be reimplemented using validators');
-
         $form = $this->factory->create('date', null, array(
-            'data_timezone' => 'UTC',
-            'user_timezone' => 'UTC',
-            'widget' => 'single_text',
-            'years' => array(2010, 2011),
-        ));
-
-        $form->bind('');
-
-        $this->assertTrue($form->isYearWithinRange());
-    }
-
-    public function testIsYearWithinRangeReturnsTrueIfEmptyChoice()
-    {
-        $this->markTestIncomplete('Needs to be reimplemented using validators');
-
-        $form = $this->factory->create('date', null, array(
-            'data_timezone' => 'UTC',
-            'user_timezone' => 'UTC',
-            'widget' => 'choice',
-            'years' => array(2010, 2011),
-        ));
-
-        $form->bind(array(
-            'day' => '1',
-            'month' => '2',
-            'year' => '',
-        ));
-
-        $this->assertTrue($form->isYearWithinRange());
-    }
-
-    public function testIsYearWithinRangeReturnsFalseIfNotContained()
-    {
-        $this->markTestIncomplete('Needs to be reimplemented using validators');
-
-        $form = $this->factory->create('date', null, array(
-            'data_timezone' => 'UTC',
-            'user_timezone' => 'UTC',
-            'widget' => 'single_text',
-            'years' => array(2010, 2012),
-        ));
-
-        $form->bind('2.6.2011');
-
-        $this->assertFalse($form->isYearWithinRange());
-    }
-
-    public function testIsMonthWithinRangeReturnsTrueIfWithin()
-    {
-        $this->markTestIncomplete('Needs to be reimplemented using validators');
-
-        $form = $this->factory->create('date', null, array(
-            'data_timezone' => 'UTC',
-            'user_timezone' => 'UTC',
-            'widget' => 'single_text',
             'months' => array(6, 7),
         ));
 
-        $form->bind('2.6.2010');
+        $view = $form->createView();
 
-        $this->assertTrue($form->isMonthWithinRange());
+        $this->assertEquals(array(
+            6 => new ChoiceView('6', '06'),
+            7 => new ChoiceView('7', '07'),
+        ), $view->getChild('month')->get('choices'));
     }
 
-    public function testIsMonthWithinRangeReturnsTrueIfEmpty()
+    public function testMonthsOptionNumericIfFormatContainsNoMonth()
     {
-        $this->markTestIncomplete('Needs to be reimplemented using validators');
-
         $form = $this->factory->create('date', null, array(
-            'data_timezone' => 'UTC',
-            'user_timezone' => 'UTC',
-            'widget' => 'single_text',
             'months' => array(6, 7),
+            'format' => 'yy',
         ));
 
-        $form->bind('');
+        $view = $form->createView();
 
-        $this->assertTrue($form->isMonthWithinRange());
+        $this->assertEquals(array(
+            6 => new ChoiceView('6', '06'),
+            7 => new ChoiceView('7', '07'),
+        ), $view->getChild('month')->get('choices'));
     }
 
-    public function testIsMonthWithinRangeReturnsTrueIfEmptyChoice()
+    public function testMonthsOptionShortFormat()
     {
-        $this->markTestIncomplete('Needs to be reimplemented using validators');
-
         $form = $this->factory->create('date', null, array(
-            'data_timezone' => 'UTC',
-            'user_timezone' => 'UTC',
-            'widget' => 'choice',
-            'months' => array(6, 7),
+            'months' => array(1, 4),
+            'format' => 'dd.MMM.yy',
         ));
 
-        $form->bind(array(
-            'day' => '1',
-            'month' => '',
-            'year' => '2011',
-        ));
+        $view = $form->createView();
 
-        $this->assertTrue($form->isMonthWithinRange());
+        $this->assertEquals(array(
+            1 => new ChoiceView('1', 'Jän'),
+            4 => new ChoiceView('4', 'Apr')
+        ), $view->getChild('month')->get('choices'));
     }
 
-    public function testIsMonthWithinRangeReturnsFalseIfNotContained()
+    public function testMonthsOptionLongFormat()
     {
-        $this->markTestIncomplete('Needs to be reimplemented using validators');
-
         $form = $this->factory->create('date', null, array(
-            'data_timezone' => 'UTC',
-            'user_timezone' => 'UTC',
-            'widget' => 'single_text',
-            'months' => array(6, 8),
+            'months' => array(1, 4),
+            'format' => 'dd.MMMM.yy',
         ));
 
-        $form->bind('2.7.2010');
+        $view = $form->createView();
 
-        $this->assertFalse($form->isMonthWithinRange());
+        $this->assertEquals(array(
+            1 => new ChoiceView('1', 'Jänner'),
+            4 => new ChoiceView('4', 'April'),
+        ), $view->getChild('month')->get('choices'));
+    }
+
+    public function testMonthsOptionLongFormatWithDifferentTimezone()
+    {
+        $form = $this->factory->create('date', null, array(
+            'months' => array(1, 4),
+            'format' => 'dd.MMMM.yy',
+        ));
+
+        $view = $form->createView();
+
+        $this->assertEquals(array(
+            1 => new ChoiceView('1', 'Jänner'),
+            4 => new ChoiceView('4', 'April'),
+        ), $view->getChild('month')->get('choices'));
     }
 
     public function testIsDayWithinRangeReturnsTrueIfWithin()
     {
-        $this->markTestIncomplete('Needs to be reimplemented using validators');
-
         $form = $this->factory->create('date', null, array(
-            'data_timezone' => 'UTC',
-            'user_timezone' => 'UTC',
-            'widget' => 'single_text',
             'days' => array(6, 7),
         ));
 
-        $form->bind('6.6.2010');
+        $view = $form->createView();
 
-        $this->assertTrue($form->isDayWithinRange());
-    }
-
-    public function testIsDayWithinRangeReturnsTrueIfEmpty()
-    {
-        $this->markTestIncomplete('Needs to be reimplemented using validators');
-
-        $form = $this->factory->create('date', null, array(
-            'data_timezone' => 'UTC',
-            'user_timezone' => 'UTC',
-            'widget' => 'single_text',
-            'days' => array(6, 7),
-        ));
-
-        $form->bind('');
-
-        $this->assertTrue($form->isDayWithinRange());
-    }
-
-    public function testIsDayWithinRangeReturnsTrueIfEmptyChoice()
-    {
-        $this->markTestIncomplete('Needs to be reimplemented using validators');
-
-        $form = $this->factory->create('date', null, array(
-            'data_timezone' => 'UTC',
-            'user_timezone' => 'UTC',
-            'widget' => 'choice',
-            'days' => array(6, 7),
-        ));
-
-        $form->bind(array(
-            'day' => '',
-            'month' => '1',
-            'year' => '2011',
-        ));
-
-        $this->assertTrue($form->isDayWithinRange());
-    }
-
-    public function testIsDayWithinRangeReturnsFalseIfNotContained()
-    {
-        $this->markTestIncomplete('Needs to be reimplemented using validators');
-
-        $this->markTestIncomplete('Needs to be reimplemented using validators');
-
-        $form = $this->factory->create('date', null, array(
-            'data_timezone' => 'UTC',
-            'user_timezone' => 'UTC',
-            'widget' => 'single_text',
-            'days' => array(6, 8),
-        ));
-
-        $form->bind('7.6.2010');
-
-        $this->assertFalse($form->isDayWithinRange());
+        $this->assertEquals(array(
+            6 => new ChoiceView('6', '06'),
+            7 => new ChoiceView('7', '07'),
+        ), $view->getChild('day')->get('choices'));
     }
 
     public function testIsPartiallyFilledReturnsFalseIfSingleText()
@@ -604,13 +499,13 @@ class DateTypeTest extends LocalizedTestCase
 
         $this->assertSame('{{ day }}.{{ month }}.{{ year }}', $view->get('date_pattern'));
     }
-    
+
     public function testPassDatePatternToViewDifferentPattern()
     {
         $form = $this->factory->create('date', null, array(
             'format' => 'MM*yyyy*dd'
         ));
-        
+
         $view = $form->createView();
 
         $this->assertSame('{{ month }}*{{ year }}*{{ day }}', $view->get('date_pattern'));
@@ -634,5 +529,13 @@ class DateTypeTest extends LocalizedTestCase
         $view = $form->createView();
 
         $this->assertSame('single_text', $view->get('widget'));
+    }
+
+    // Bug fix
+    public function testInitializeWithDateTime()
+    {
+        // Throws an exception if "data_class" option is not explicitely set
+        // to null in the type
+        $this->factory->create('date', new \DateTime());
     }
 }

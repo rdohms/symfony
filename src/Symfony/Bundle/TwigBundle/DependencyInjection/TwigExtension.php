@@ -12,7 +12,6 @@
 namespace Symfony\Bundle\TwigBundle\DependencyInjection;
 
 use Symfony\Component\Config\FileLocator;
-use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\DependencyInjection\Loader\XmlFileLoader;
@@ -37,12 +36,15 @@ class TwigExtension extends Extension
         $loader = new XmlFileLoader($container, new FileLocator(__DIR__.'/../Resources/config'));
         $loader->load('twig.xml');
 
-        $processor = new Processor();
-        $configuration = new Configuration();
-        $config = $processor->processConfiguration($configuration, $configs);
+        $configuration = $this->getConfiguration($configs, $container);
+        $config = $this->processConfiguration($configuration, $configs);
+
+        $container->setParameter('twig.exception_listener.controller', $config['exception_controller']);
 
         $container->setParameter('twig.form.resources', $config['form']['resources']);
-        $container->getDefinition('twig.loader')->addMethodCall('addPath', array(__DIR__.'/../../../Bridge/Twig/Resources/views/Form'));
+
+        $reflClass = new \ReflectionClass('Symfony\Bridge\Twig\Extension\FormExtension');
+        $container->getDefinition('twig.loader')->addMethodCall('addPath', array(dirname(dirname($reflClass->getFileName())) . '/Resources/views/Form'));
 
         if (!empty($config['globals'])) {
             $def = $container->getDefinition('twig');
@@ -62,6 +64,13 @@ class TwigExtension extends Extension
         );
 
         $container->setParameter('twig.options', $config);
+
+        if ($container->getParameter('kernel.debug')) {
+            $loader->load('debug.xml');
+
+            $container->setDefinition('templating.engine.twig', $container->findDefinition('debug.templating.engine.twig'));
+            $container->setAlias('debug.templating.engine.twig', 'templating.engine.twig');
+        }
 
         $this->addClassesToCompile(array(
             'Twig_Environment',

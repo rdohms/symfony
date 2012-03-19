@@ -12,8 +12,6 @@
 namespace Symfony\Bridge\Twig\Node;
 
 /**
- *
- *
  * @author Fabien Potencier <fabien@symfony.com>
  */
 class FormThemeNode extends \Twig_Node
@@ -34,16 +32,9 @@ class FormThemeNode extends \Twig_Node
             ->addDebugInfo($this)
             ->write('echo $this->env->getExtension(\'form\')->setTheme(')
             ->subcompile($this->getNode('form'))
-            ->raw(', array(')
+            ->raw(', ')
+            ->subcompile($this->getNode('resources'))
+            ->raw(");\n");
         ;
-
-        foreach ($this->getNode('resources') as $resource) {
-            $compiler
-                ->subcompile($resource)
-                ->raw(', ')
-            ;
-        }
-
-        $compiler->raw("));\n");
     }
 }

@@ -14,6 +14,8 @@ namespace Symfony\Bridge\Twig\Extension;
 use Symfony\Bridge\Twig\TokenParser\FormThemeTokenParser;
 use Symfony\Component\Form\FormView;
 use Symfony\Component\Form\Exception\FormException;
+use Symfony\Component\Form\Extension\Csrf\CsrfProvider\CsrfProviderInterface;
+use Symfony\Component\Form\Extension\Core\View\ChoiceView;
 use Symfony\Component\Form\Util\FormUtil;
 
 /**
@@ -24,6 +26,7 @@ use Symfony\Component\Form\Util\FormUtil;
  */
 class FormExtension extends \Twig_Extension
 {
+    protected $csrfProvider;
     protected $resources;
     protected $blocks;
     protected $environment;
@@ -31,8 +34,9 @@ class FormExtension extends \Twig_Extension
     protected $varStack;
     protected $template;
 
-    public function __construct(array $resources = array())
+    public function __construct(CsrfProviderInterface $csrfProvider = null, array $resources = array())
     {
+        $this->csrfProvider = $csrfProvider;
         $this->themes = new \SplObjectStorage();
         $this->varStack = array();
         $this->blocks = new \SplObjectStorage();
@@ -50,12 +54,12 @@ class FormExtension extends \Twig_Extension
     /**
      * Sets a theme for a given view.
      *
-     * @param FormView $view      A FormView instance
-     * @param array    $resources An array of resources
+     * @param FormView     $view      A FormView instance
+     * @param array|string $resources An array of resource names|a resource name
      */
-    public function setTheme(FormView $view, array $resources)
+    public function setTheme(FormView $view, $resources)
     {
-        $this->themes->attach($view, $resources);
+        $this->themes->attach($view, (array) $resources);
         $this->blocks = new \SplObjectStorage();
     }
 
@@ -67,7 +71,7 @@ class FormExtension extends \Twig_Extension
     public function getTokenParsers()
     {
         return array(
-            // {% form_theme form "SomeBungle::widgets.twig" %}
+            // {% form_theme form "SomeBundle::widgets.twig" %}
             new FormThemeTokenParser(),
         );
     }
@@ -81,6 +85,7 @@ class FormExtension extends \Twig_Extension
             'form_label'               => new \Twig_Function_Method($this, 'renderLabel', array('is_safe' => array('html'))),
             'form_row'                 => new \Twig_Function_Method($this, 'renderRow', array('is_safe' => array('html'))),
             'form_rest'                => new \Twig_Function_Method($this, 'renderRest', array('is_safe' => array('html'))),
+            'csrf_token'               => new \Twig_Function_Method($this, 'getCsrfToken'),
             '_form_is_choice_group'    => new \Twig_Function_Method($this, 'isChoiceGroup', array('is_safe' => array('html'))),
             '_form_is_choice_selected' => new \Twig_Function_Method($this, 'isChoiceSelected', array('is_safe' => array('html'))),
         );
@@ -91,9 +96,9 @@ class FormExtension extends \Twig_Extension
         return FormUtil::isChoiceGroup($label);
     }
 
-    public function isChoiceSelected(FormView $view, $choice)
+    public function isChoiceSelected(FormView $view, ChoiceView $choice)
     {
-        return FormUtil::isChoiceSelected($choice, $view->get('value'));
+        return FormUtil::isChoiceSelected($choice->getValue(), $view->get('value'));
     }
 
     /**
@@ -223,7 +228,7 @@ class FormExtension extends \Twig_Extension
             }
         }
 
-        $custom = '_'.$view->get('proto_id', $view->get('id'));
+        $custom = '_'.$view->get('id');
         $rendering = $custom.$section;
         $blocks = $this->getBlocks($view);
 
@@ -248,7 +253,10 @@ class FormExtension extends \Twig_Extension
 
                 $this->varStack[$rendering]['typeIndex'] = $typeIndex;
 
-                $html = $this->template->renderBlock($types[$typeIndex], $this->varStack[$rendering]['variables'], $blocks);
+                // we do not call renderBlock here to avoid too many nested level calls (XDebug limits the level to 100 by default)
+                ob_start();
+                $this->template->displayBlock($types[$typeIndex], $this->varStack[$rendering]['variables'], $blocks);
+                $html = ob_get_clean();
 
                 if ($mainTemplate) {
                     $view->setRendered();
@@ -264,6 +272,38 @@ class FormExtension extends \Twig_Extension
             'Unable to render the form as none of the following blocks exist: "%s".',
             implode('", "', array_reverse($types))
         ));
+    }
+
+    /**
+     * Returns a CSRF token.
+     *
+     * Use this helper for CSRF protection without the overhead of creating a
+     * form.
+     *
+     * <code>
+     * <input type="hidden" name="token" value="{{ csrf_token('rm_user_' ~ user.id) }}">
+     * </code>
+     *
+     * Check the token in your action using the same intention.
+     *
+     * <code>
+     * $csrfProvider = $this->get('form.csrf_provider');
+     * if (!$csrfProvider->isCsrfTokenValid('rm_user_'.$user->getId(), $token)) {
+     *     throw new \RuntimeException('CSRF attack detected.');
+     * }
+     * </code>
+     *
+     * @param string $intention The intention of the protected action
+     *
+     * @return string A CSRF token
+     */
+    public function getCsrfToken($intention)
+    {
+        if (!$this->csrfProvider instanceof CsrfProviderInterface) {
+            throw new \BadMethodCallException('CSRF token can only be generated if a CsrfProviderInterface is injected in the constructor.');
+        }
+
+        return $this->csrfProvider->generateCsrfToken($intention);
     }
 
     /**

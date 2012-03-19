@@ -36,14 +36,15 @@ class CacheClearCommand extends ContainerAwareCommand
             ->setName('cache:clear')
             ->setDefinition(array(
                 new InputOption('no-warmup', '', InputOption::VALUE_NONE, 'Do not warm up the cache'),
+                new InputOption('no-optional-warmers', '', InputOption::VALUE_NONE, 'Skip optional cache warmers (faster)'),
             ))
-            ->setDescription('Clear the cache')
+            ->setDescription('Clears the cache')
             ->setHelp(<<<EOF
 The <info>cache:clear</info> command clears the application cache for a given environment
 and debug mode:
 
-<info>./app/console cache:clear --env=dev</info>
-<info>./app/console cache:clear --env=prod --no-debug</info>
+<info>php app/console cache:clear --env=dev</info>
+<info>php app/console cache:clear --env=prod --no-debug</info>
 EOF
             )
         ;
@@ -61,12 +62,17 @@ EOF
             throw new \RuntimeException(sprintf('Unable to write in the "%s" directory', $realCacheDir));
         }
 
+        $kernel = $this->getContainer()->get('kernel');
+        $output->writeln(sprintf('Clearing the cache for the <info>%s</info> environment with debug <info>%s</info>', $kernel->getEnvironment(), var_export($kernel->isDebug(), true)));
+
+        $this->getContainer()->get('cache_clearer')->clear($realCacheDir);
+
         if ($input->getOption('no-warmup')) {
             rename($realCacheDir, $oldCacheDir);
         } else {
             $warmupDir = $realCacheDir.'_new';
 
-            $this->warmup($warmupDir);
+            $this->warmup($warmupDir, !$input->getOption('no-optional-warmers'));
 
             rename($realCacheDir, $oldCacheDir);
             rename($warmupDir, $realCacheDir);
@@ -75,7 +81,7 @@ EOF
         $this->getContainer()->get('filesystem')->remove($oldCacheDir);
     }
 
-    protected function warmup($warmupDir)
+    protected function warmup($warmupDir, $enableOptionalWarmers = true)
     {
         $this->getContainer()->get('filesystem')->remove($warmupDir);
 
@@ -91,7 +97,11 @@ EOF
         $kernel->boot();
 
         $warmer = $kernel->getContainer()->get('cache_warmer');
-        $warmer->enableOptionalWarmers();
+
+        if ($enableOptionalWarmers) {
+            $warmer->enableOptionalWarmers();
+        }
+
         $warmer->warmUp($warmupDir);
 
         // fix container files and classes
@@ -100,6 +110,10 @@ EOF
         foreach ($finder->files()->name(get_class($kernel->getContainer()).'*')->in($warmupDir) as $file) {
             $content = file_get_contents($file);
             $content = preg_replace($regex, '', $content);
+
+            // fix absolute paths to the cache directory
+            $content = preg_replace('/'.preg_quote($warmupDir, '/').'/', preg_replace('/_new$/', '', $warmupDir), $content);
+
             file_put_contents(preg_replace($regex, '', $file), $content);
             unlink($file);
         }

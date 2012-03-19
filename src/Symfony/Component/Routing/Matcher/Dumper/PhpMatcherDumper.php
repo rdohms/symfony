@@ -54,7 +54,8 @@ class PhpMatcherDumper extends MatcherDumper
 
     private function addMatcher($supportsRedirections)
     {
-        $code = implode("\n", $this->compileRoutes($this->getRoutes(), $supportsRedirections));
+        // we need to deep clone the routes as we will modify the structure to optimize the dump
+        $code = implode("\n", $this->compileRoutes(clone $this->getRoutes(), $supportsRedirections));
 
         return <<<EOF
 
@@ -74,7 +75,6 @@ EOF;
     {
         $code = array();
 
-        $routes = clone $routes;
         $routeIterator = $routes->getIterator();
         $keys = array_keys($routeIterator->getArrayCopy());
         $keysCount = count($keys);
@@ -83,7 +83,6 @@ EOF;
         foreach ($routeIterator as $name => $route) {
             $i++;
 
-            $route = clone $route;
             if ($route instanceof RouteCollection) {
                 $prefix = $route->getPrefix();
                 $optimizable = $prefix && count($route->all()) > 1 && false === strpos($route->getPrefix(), '{');
@@ -91,7 +90,7 @@ EOF;
                 if ($optimizable) {
                     for ($j = $i; $j < $keysCount; $j++) {
                         if ($keys[$j] === null) {
-                          continue;
+                            continue;
                         }
 
                         $testRoute = $routeIterator->offsetGet($keys[$j]);
@@ -149,8 +148,18 @@ EOF;
         $conditions = array();
         $hasTrailingSlash = false;
         $matches = false;
+        $methods = array();
+        if ($req = $route->getRequirement('_method')) {
+            $methods = explode('|', strtoupper($req));
+            // GET and HEAD are equivalent
+            if (in_array('GET', $methods) && !in_array('HEAD', $methods)) {
+                $methods[] = 'HEAD';
+            }
+        }
+        $supportsTrailingSlash = $supportsRedirections && (!$methods || in_array('HEAD', $methods));
+
         if (!count($compiledRoute->getVariables()) && false !== preg_match('#^(.)\^(?P<url>.*?)\$\1#', str_replace(array("\n", ' '), '', $compiledRoute->getRegex()), $m)) {
-            if ($supportsRedirections && substr($m['url'], -1) === '/') {
+            if ($supportsTrailingSlash && substr($m['url'], -1) === '/') {
                 $conditions[] = sprintf("rtrim(\$pathinfo, '/') === %s", var_export(rtrim(str_replace('\\', '', $m['url']), '/'), true));
                 $hasTrailingSlash = true;
             } else {
@@ -162,7 +171,7 @@ EOF;
             }
 
             $regex = str_replace(array("\n", ' '), '', $compiledRoute->getRegex());
-            if ($supportsRedirections && $pos = strpos($regex, '/$')) {
+            if ($supportsTrailingSlash && $pos = strpos($regex, '/$')) {
                 $regex = substr($regex, 0, $pos).'/?$'.substr($regex, $pos + 2);
                 $hasTrailingSlash = true;
             }
@@ -180,12 +189,7 @@ EOF;
         if ($conditions) {
 EOF;
 
-        if ($req = $route->getRequirement('_method')) {
-            $methods = explode('|', strtoupper($req));
-            // GET and HEAD are equivalent
-            if (in_array('GET', $methods) && !in_array('HEAD', $methods)) {
-                $methods[] = 'HEAD';
-            }
+        if ($methods) {
             if (1 === count($methods)) {
                 $code[] = <<<EOF
             if (\$this->context->getMethod() != '$methods[0]') {
@@ -215,7 +219,7 @@ EOF
 
         if ($scheme = $route->getRequirement('_scheme')) {
             if (!$supportsRedirections) {
-                throw new \LogicException('The "_scheme" requirement is only supported for route dumper that implements RedirectableUrlMatcherInterface.');
+                throw new \LogicException('The "_scheme" requirement is only supported for URL matchers that implement RedirectableUrlMatcherInterface.');
             }
 
             $code[] = sprintf(<<<EOF
@@ -240,7 +244,7 @@ EOF
         }
         $code[] = "        }";
 
-        if ($req) {
+        if ($methods) {
             $code[] = "        $gotoname:";
         }
 

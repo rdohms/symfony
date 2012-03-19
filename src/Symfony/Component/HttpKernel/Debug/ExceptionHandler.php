@@ -14,6 +14,10 @@ namespace Symfony\Component\HttpKernel\Debug;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\FlattenException;
 
+if (!defined('ENT_SUBSTITUTE')) {
+    define('ENT_SUBSTITUTE', 8);
+}
+
 /**
  * ExceptionHandler converts an exception to a Response object.
  *
@@ -27,14 +31,23 @@ use Symfony\Component\HttpKernel\Exception\FlattenException;
  */
 class ExceptionHandler
 {
+    private $debug;
+    private $charset;
+
+    public function __construct($debug = true, $charset = 'UTF-8')
+    {
+        $this->debug = $debug;
+        $this->charset = $charset;
+    }
+
     /**
      * Register the exception handler.
      *
      * @return The registered exception handler
      */
-    static public function register()
+    static public function register($debug = true)
     {
-        $handler = new static();
+        $handler = new static($debug);
 
         set_exception_handler(array($handler, 'handle'));
 
@@ -42,24 +55,52 @@ class ExceptionHandler
     }
 
     /**
-     * Returns a Response for the given Exception.
+     * Sends a Response for the given Exception.
      *
      * @param \Exception $exception An \Exception instance
-     *
-     * @return Response A Response instance
      */
     public function handle(\Exception $exception)
     {
+        $this->createResponse($exception)->send();
+    }
+
+    /**
+     * Creates the error Response associated with the given Exception.
+     *
+     * @param \Exception|FlattenException $exception An \Exception instance
+     *
+     * @return Response A Response instance
+     */
+    public function createResponse($exception)
+    {
+        $content = '';
+        $title = '';
         try {
-            $exception = FlattenException::create($exception);
+            if (!$exception instanceof FlattenException) {
+                $exception = FlattenException::create($exception);
+            }
 
-            $response = new Response($this->decorate($exception, $this->getContent($exception)), 500);
+            switch ($exception->getStatusCode()) {
+                case 404:
+                    $title = 'Sorry, the page you are looking for could not be found.';
+                    break;
+                default:
+                    $title = 'Whoops, looks like something went wrong.';
+            }
 
-            $response->send();
+            if ($this->debug) {
+                $content = $this->getContent($exception);
+            }
         } catch (\Exception $e) {
             // something nasty happened and we cannot throw an exception here anymore
-            printf('Exception thrown when handling an exception (%s: %s)', get_class($exception), $exception->getMessage());
+            if ($this->debug) {
+                $title = sprintf('Exception thrown when handling an exception (%s: %s)', get_class($exception), $exception->getMessage());
+            } else {
+                $title = 'Whoops, looks like something went wrong.';
+            }
         }
+
+        return new Response($this->decorate($content, $title), $exception->getStatusCode());
     }
 
     private function getContent($exception)
@@ -73,28 +114,39 @@ class ExceptionHandler
             $total = $count + 1;
             $class = $this->abbrClass($e['class']);
             $message = nl2br($e['message']);
-            $content .= "<div class=\"block_exception clear_fix\"><h1><span>$ind/$total</span> $class: $message</h1></div><div class=\"block\"><ol class=\"traces list_exception\">";
+            $content .= sprintf(<<<EOF
+<div class="block_exception clear_fix">
+    <h2><span>%d/%d</span> %s: %s</h2>
+</div>
+<div class="block">
+    <ol class="traces list_exception">
+
+EOF
+                , $ind, $total, $class, $message);
             foreach ($e['trace'] as $i => $trace) {
-                $content .= '<li>';
+                $content .= '       <li>';
                 if ($trace['function']) {
-                    $content .= sprintf('at %s%s%s()', $this->abbrClass($trace['class']), $trace['type'], $trace['function']);
+                    $content .= sprintf('at %s%s%s(%s)', $this->abbrClass($trace['class']), $trace['type'], $trace['function'], $this->formatArgs($trace['args']));
                 }
                 if (isset($trace['file']) && isset($trace['line'])) {
-                    $content .= sprintf(' in %s line %s', $trace['file'], $trace['line']);
+                    if ($linkFormat = ini_get('xdebug.file_link_format')) {
+                        $link = str_replace(array('%f', '%l'), array($trace['file'], $trace['line']), $linkFormat);
+                        $content .= sprintf(' in <a href="%s" title="Go to source">%s line %s</a>', $link, $trace['file'], $trace['line']);
+                    } else {
+                        $content .= sprintf(' in %s line %s', $trace['file'], $trace['line']);
+                    }
                 }
-                $content .= '</li>';
+                $content .= "</li>\n";
             }
 
-            $content .= '</ol></div>';
+            $content .= "    </ol>\n</div>\n";
         }
 
-        return '<div class="sf-exceptionreset">'.$content.'</div>';
+        return $content;
     }
 
-    private function decorate($exception, $content)
+    private function decorate($content, $title)
     {
-        $title = sprintf('%s (%s %s)', $exception->getMessage(), $exception->getStatusCode(), Response::$statusTexts[$exception->getStatusCode()]);
-
         return <<<EOF
 <!DOCTYPE html>
 <html>
@@ -123,8 +175,8 @@ class ExceptionHandler
             .sf-exceptionreset a img { border:none; }
             .sf-exceptionreset a:hover { text-decoration:underline; }
             .sf-exceptionreset em { font-style:italic; }
-            .sf-exceptionreset h1 { font: 20px Georgia, "Times New Roman", Times, serif }
-            .sf-exceptionreset h1 span { background-color: #fff; color: #333; padding: 6px; float: left; margin-right: 10px; }
+            .sf-exceptionreset h1, .sf-exceptionreset h2 { font: 20px Georgia, "Times New Roman", Times, serif }
+            .sf-exceptionreset h2 span { background-color: #fff; color: #333; padding: 6px; float: left; margin-right: 10px; }
             .sf-exceptionreset .traces li { font-size:12px; padding: 2px 4px; list-style-type:decimal; margin-left:20px; }
             .sf-exceptionreset .block { background-color:#FFFFFF; padding:10px 28px; margin-bottom:20px;
                 -webkit-border-bottom-right-radius: 16px;
@@ -151,11 +203,18 @@ class ExceptionHandler
             .sf-exceptionreset li a { background:none; color:#868686; text-decoration:none; }
             .sf-exceptionreset li a:hover { background:none; color:#313131; text-decoration:underline; }
             .sf-exceptionreset ol { padding: 10px 0; }
+            .sf-exceptionreset h1 { background-color:#FFFFFF; padding: 15px 28px; margin-bottom: 20px;
+                -webkit-border-radius: 10px;
+                -moz-border-radius: 10px;
+                border-radius: 10px;
+                border: 1px solid #ccc;
+            }
         </style>
     </head>
     <body>
-        <div id="content">
-            $content
+        <div id="content" class="sf-exceptionreset">
+            <h1>$title</h1>
+$content
         </div>
     </body>
 </html>
@@ -167,5 +226,38 @@ EOF;
         $parts = explode('\\', $class);
 
         return sprintf("<abbr title=\"%s\">%s</abbr>", $class, array_pop($parts));
+    }
+
+    /**
+     * Formats an array as a string.
+     *
+     * @param array $args The argument array
+     *
+     * @return string
+     */
+    public function formatArgs(array $args)
+    {
+        $result = array();
+        foreach ($args as $key => $item) {
+            if ('object' === $item[0]) {
+                $formattedValue = sprintf("<em>object</em>(%s)", $this->abbrClass($item[1]));
+            } elseif ('array' === $item[0]) {
+                $formattedValue = sprintf("<em>array</em>(%s)", is_array($item[1]) ? $this->formatArgs($item[1]) : $item[1]);
+            } elseif ('string'  === $item[0]) {
+                $formattedValue = sprintf("'%s'", htmlspecialchars($item[1], ENT_QUOTES | ENT_SUBSTITUTE, $this->charset));
+            } elseif ('null' === $item[0]) {
+                $formattedValue = '<em>null</em>';
+            } elseif ('boolean' === $item[0]) {
+                $formattedValue = '<em>'.strtolower(var_export($item[1], true)).'</em>';
+            } elseif ('resource' === $item[0]) {
+                $formattedValue = '<em>resource</em>';
+            } else {
+                $formattedValue = str_replace("\n", '', var_export(htmlspecialchars((string) $item[1], ENT_QUOTES | ENT_SUBSTITUTE, $this->charset), true));
+            }
+
+            $result[] = is_int($key) ? $formattedValue : sprintf("'%s' => %s", $key, $formattedValue);
+        }
+
+        return implode(', ', $result);
     }
 }

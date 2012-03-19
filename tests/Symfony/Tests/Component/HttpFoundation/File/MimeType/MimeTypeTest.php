@@ -13,7 +13,6 @@ namespace Symfony\Tests\Component\HttpFoundation\File;
 
 use Symfony\Component\HttpFoundation\File\File;
 use Symfony\Component\HttpFoundation\File\MimeType\MimeTypeGuesser;
-use Symfony\Component\HttpFoundation\File\MimeType\ContentTypeMimeTypeGuesser;
 use Symfony\Component\HttpFoundation\File\MimeType\FileBinaryMimeTypeGuesser;
 use Symfony\Component\HttpFoundation\File\Exception\FileNotFoundException;
 use Symfony\Component\HttpFoundation\File\Exception\AccessDeniedException;
@@ -33,24 +32,9 @@ class MimeTypeTest extends \PHPUnit_Framework_TestCase
 
     public function testGuessImageWithDirectory()
     {
-        if (extension_loaded('fileinfo')) {
-            $this->setExpectedException('Symfony\Component\HttpFoundation\File\Exception\FileNotFoundException');
+        $this->setExpectedException('Symfony\Component\HttpFoundation\File\Exception\FileNotFoundException');
 
-            $this->assertEquals('image/gif', MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/directory'));
-        } else {
-            $this->assertNull(MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/directory'));
-        }
-    }
-
-    public function testGuessImageWithContentTypeMimeTypeGuesser()
-    {
-        $guesser = MimeTypeGuesser::getInstance();
-        $guesser->register(new ContentTypeMimeTypeGuesser());
-        if (extension_loaded('fileinfo')) {
-            $this->assertEquals('image/gif', MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/test'));
-        } else {
-            $this->assertNull(MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/test'));
-        }
+        MimeTypeGuesser::getInstance()->guess(__DIR__.'/../Fixtures/directory');
     }
 
     public function testGuessImageWithFileBinaryMimeTypeGuesser()
@@ -90,15 +74,19 @@ class MimeTypeTest extends \PHPUnit_Framework_TestCase
 
     public function testGuessWithNonReadablePath()
     {
-        if (strstr(PHP_OS, 'WIN')) {
+        if (defined('PHP_WINDOWS_VERSION_BUILD')) {
             $this->markTestSkipped('Can not verify chmod operations on Windows');
+        }
+
+        if (in_array(get_current_user(), array('root'))) {
+            $this->markTestSkipped('This test will fail if run under superuser');
         }
 
         $path = __DIR__.'/../Fixtures/to_delete';
         touch($path);
         chmod($path, 0333);
 
-        if (substr(sprintf('%o', fileperms($path)), -4) == '0333') {
+        if (get_current_user() != 'root' && substr(sprintf('%o', fileperms($path)), -4) == '0333') {
             $this->setExpectedException('Symfony\Component\HttpFoundation\File\Exception\AccessDeniedException');
             MimeTypeGuesser::getInstance()->guess($path);
         } else {

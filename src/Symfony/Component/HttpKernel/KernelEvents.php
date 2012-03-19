@@ -15,6 +15,8 @@ namespace Symfony\Component\HttpKernel;
  * Contains all events thrown in the HttpKernel component
  *
  * @author Bernhard Schussek <bernhard.schussek@symfony.com>
+ *
+ * @api
  */
 final class KernelEvents
 {
@@ -28,6 +30,8 @@ final class KernelEvents
      * instance.
      *
      * @var string
+     *
+     * @api
      */
     const REQUEST = 'kernel.request';
 
@@ -40,6 +44,8 @@ final class KernelEvents
      * instance.
      *
      * @var string
+     *
+     * @api
      */
     const EXCEPTION = 'kernel.exception';
 
@@ -53,6 +59,8 @@ final class KernelEvents
      * instance.
      *
      * @var string
+     *
+     * @api
      */
     const VIEW = 'kernel.view';
 
@@ -65,6 +73,8 @@ final class KernelEvents
      * Symfony\Component\HttpKernel\Event\FilterControllerEvent instance.
      *
      * @var string
+     *
+     * @api
      */
     const CONTROLLER = 'kernel.controller';
 
@@ -77,6 +87,19 @@ final class KernelEvents
      * Symfony\Component\HttpKernel\Event\FilterResponseEvent instance.
      *
      * @var string
+     *
+     * @api
      */
     const RESPONSE = 'kernel.response';
+
+    /**
+     * The TERMINATE event occurs once a reponse was sent
+     *
+     * This event allows you to run expensive post-response jobs.
+     * The event listener method receives a
+     * Symfony\Component\HttpKernel\Event\PostResponseEvent instance.
+     *
+     * @var string
+     */
+    const TERMINATE = 'kernel.terminate';
 }

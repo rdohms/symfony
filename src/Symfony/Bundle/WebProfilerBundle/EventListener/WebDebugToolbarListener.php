@@ -11,12 +11,11 @@
 
 namespace Symfony\Bundle\WebProfilerBundle\EventListener;
 
-use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 use Symfony\Component\HttpKernel\Event\FilterResponseEvent;
 use Symfony\Bundle\TwigBundle\TwigEngine;
-use Symfony\Bundle\WebProfilerBundle\EventListener\WebDebugToolbarListener;
+use Symfony\Component\HttpFoundation\Session\Flash\AutoExpireFlashBag;
 
 /**
  * WebDebugToolbarListener injects the Web Debug Toolbar.
@@ -37,12 +36,14 @@ class WebDebugToolbarListener
     protected $templating;
     protected $interceptRedirects;
     protected $mode;
+    protected $position;
 
-    public function __construct(TwigEngine $templating, $interceptRedirects = false, $mode = self::ENABLED)
+    public function __construct(TwigEngine $templating, $interceptRedirects = false, $mode = self::ENABLED, $position = 'bottom')
     {
         $this->templating = $templating;
         $this->interceptRedirects = (Boolean) $interceptRedirects;
         $this->mode = (integer) $mode;
+        $this->position = $position;
     }
 
     public function isVerbose()
@@ -70,9 +71,10 @@ class WebDebugToolbarListener
         }
 
         if ($response->headers->has('X-Debug-Token') && $response->isRedirect() && $this->interceptRedirects) {
-            if (null !== $session = $request->getSession()) {
-                // keep current flashes for one more request
-                $session->setFlashes($session->getFlashes());
+            $session = $request->getSession();
+            if ($session && $session->getFlashBag() instanceof AutoExpireFlashBag) {
+                // keep current flashes for one more request if using AutoExpireFlashBag
+                $session->getFlashBag()->setAll($session->getFlashBag()->peekAll());
             }
 
             $response->setContent($this->templating->render('WebProfilerBundle:Profiler:toolbar_redirect.html.twig', array('location' => $response->headers->get('Location'))));
@@ -82,7 +84,7 @@ class WebDebugToolbarListener
 
         if (self::DISABLED === $this->mode
             || !$response->headers->has('X-Debug-Token')
-            || '3' === substr($response->getStatusCode(), 0, 1)
+            || $response->isRedirection()
             || ($response->headers->has('Content-Type') && false === strpos($response->headers->get('Content-Type'), 'html'))
             || 'html' !== $request->getRequestFormat()
         ) {
@@ -100,16 +102,26 @@ class WebDebugToolbarListener
     protected function injectToolbar(Response $response)
     {
         if (function_exists('mb_stripos')) {
-            $posrFunction = 'mb_strripos';
+            $posrFunction   = 'mb_strripos';
+            $posFunction    = 'mb_stripos';
             $substrFunction = 'mb_substr';
         } else {
-            $posrFunction = 'strripos';
+            $posrFunction   = 'strripos';
+            $posFunction    = 'stripos';
             $substrFunction = 'substr';
         }
 
         $content = $response->getContent();
 
-        if (false !== $pos = $posrFunction($content, '</body>')) {
+        if ($this->position === 'bottom') {
+            $pos = $posrFunction($content, '</body>');
+        } else {
+            $pos = $posFunction($content, '<body');
+            if (false !== $pos) {
+                $pos = $posFunction($content, '>', $pos) + 1;
+            }
+        }
+        if (false !== $pos) {
             $toolbar = "\n".str_replace("\n", '', $this->templating->render(
                 'WebProfilerBundle:Profiler:toolbar_js.html.twig',
                 array('token' => $response->headers->get('X-Debug-Token'))

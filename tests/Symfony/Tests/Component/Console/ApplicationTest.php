@@ -12,10 +12,12 @@
 namespace Symfony\Tests\Component\Console;
 
 use Symfony\Component\Console\Application;
-use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\Output;
-use Symfony\Component\Console\Output\StreamOutput;
 use Symfony\Component\Console\Tester\ApplicationTester;
+use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Input\ArrayInput;
+use Symfony\Component\Console\Output\NullOutput;
 
 class ApplicationTest extends \PHPUnit_Framework_TestCase
 {
@@ -66,7 +68,7 @@ class ApplicationTest extends \PHPUnit_Framework_TestCase
     public function testHelp()
     {
         $application = new Application();
-        $this->assertStringEqualsFile(self::$fixturesPath.'/application_gethelp.txt', $application->getHelp(), '->setHelp() returns a help message');
+        $this->assertStringEqualsFile(self::$fixturesPath.'/application_gethelp.txt', str_replace(PHP_EOL, "\n", $application->getHelp()), '->setHelp() returns a help message');
     }
 
     public function testAll()
@@ -181,7 +183,7 @@ class ApplicationTest extends \PHPUnit_Framework_TestCase
             $this->fail('->find() throws an \InvalidArgumentException if the abbreviation is ambiguous for a namespace');
         } catch (\Exception $e) {
             $this->assertInstanceOf('\InvalidArgumentException', $e, '->find() throws an \InvalidArgumentException if the abbreviation is ambiguous for a namespace');
-            $this->assertEquals('Command "f" is not defined.', $e->getMessage(), '->find() throws an \InvalidArgumentException if the abbreviation is ambiguous for a namespace');
+            $this->assertRegExp('/Command "f" is not defined./', $e->getMessage(), '->find() throws an \InvalidArgumentException if the abbreviation is ambiguous for a namespace');
         }
 
         try {
@@ -201,6 +203,74 @@ class ApplicationTest extends \PHPUnit_Framework_TestCase
         }
     }
 
+    public function testFindAlternativeCommands()
+    {
+        $application = new Application();
+
+        $application->add(new \FooCommand());
+        $application->add(new \Foo1Command());
+        $application->add(new \Foo2Command());
+
+        try {
+            $application->find($commandName = 'Unknow command');
+            $this->fail('->find() throws an \InvalidArgumentException if command does not exist');
+        } catch (\Exception $e) {
+            $this->assertInstanceOf('\InvalidArgumentException', $e, '->find() throws an \InvalidArgumentException if command does not exist');
+            $this->assertEquals(sprintf('Command "%s" is not defined.', $commandName), $e->getMessage(), '->find() throws an \InvalidArgumentException if command does not exist, without alternatives');
+        }
+
+        try {
+            $application->find($commandName = 'foo');
+            $this->fail('->find() throws an \InvalidArgumentException if command does not exist');
+        } catch (\Exception $e) {
+            $this->assertInstanceOf('\InvalidArgumentException', $e, '->find() throws an \InvalidArgumentException if command does not exist');
+            $this->assertRegExp(sprintf('/Command "%s" is not defined./', $commandName), $e->getMessage(), '->find() throws an \InvalidArgumentException if command does not exist, with alternatives');
+            $this->assertRegExp('/foo:bar/', $e->getMessage(), '->find() throws an \InvalidArgumentException if command does not exist, with alternative : "foo:bar"');
+            $this->assertRegExp('/foo1:bar/', $e->getMessage(), '->find() throws an \InvalidArgumentException if command does not exist, with alternative : "foo1:bar"');
+            $this->assertRegExp('/foo:bar1/', $e->getMessage(), '->find() throws an \InvalidArgumentException if command does not exist, with alternative : "foo:bar1"');
+        }
+
+        // Test if "foo1" command throw an "\InvalidArgumentException" and does not contain
+        // "foo:bar" as alternative because "foo1" is too far from "foo:bar"
+        try {
+            $application->find($commandName = 'foo1');
+            $this->fail('->find() throws an \InvalidArgumentException if command does not exist');
+        } catch (\Exception $e) {
+            $this->assertInstanceOf('\InvalidArgumentException', $e, '->find() throws an \InvalidArgumentException if command does not exist');
+            $this->assertRegExp(sprintf('/Command "%s" is not defined./', $commandName), $e->getMessage(), '->find() throws an \InvalidArgumentException if command does not exist, with alternatives');
+            $this->assertFalse(strpos($e->getMessage(), 'foo:bar'), '->find() throws an \InvalidArgumentException if command does not exist, without "foo:bar" alternative');
+        }
+    }
+
+    public function testFindAlternativeNamespace()
+    {
+        $application = new Application();
+
+        $application->add(new \FooCommand());
+        $application->add(new \Foo1Command());
+        $application->add(new \Foo2Command());
+        $application->add(new \foo3Command());
+
+        try {
+            $application->find('Unknow-namespace:Unknow-command');
+            $this->fail('->find() throws an \InvalidArgumentException if namespace does not exist');
+        } catch (\Exception $e) {
+            $this->assertInstanceOf('\InvalidArgumentException', $e, '->find() throws an \InvalidArgumentException if namespace does not exist');
+            $this->assertEquals('There are no commands defined in the "Unknow-namespace" namespace.', $e->getMessage(), '->find() throws an \InvalidArgumentException if namespace does not exist, without alternatives');
+        }
+
+        try {
+            $application->find('foo2:command');
+            $this->fail('->find() throws an \InvalidArgumentException if namespace does not exist');
+        } catch (\Exception $e) {
+            $this->assertInstanceOf('\InvalidArgumentException', $e, '->find() throws an \InvalidArgumentException if namespace does not exist');
+            $this->assertRegExp('/There are no commands defined in the "foo2" namespace./', $e->getMessage(), '->find() throws an \InvalidArgumentException if namespace does not exist, with alternative');
+            $this->assertRegExp('/foo/', $e->getMessage(), '->find() throws an \InvalidArgumentException if namespace does not exist, with alternative : "foo"');
+            $this->assertRegExp('/foo1/', $e->getMessage(), '->find() throws an \InvalidArgumentException if namespace does not exist, with alternative : "foo1"');
+            $this->assertRegExp('/foo3/', $e->getMessage(), '->find() throws an \InvalidArgumentException if namespace does not exist, with alternative : "foo3"');
+        }
+    }
+
     public function testSetCatchExceptions()
     {
         $application = new Application();
@@ -208,12 +278,12 @@ class ApplicationTest extends \PHPUnit_Framework_TestCase
         $tester = new ApplicationTester($application);
 
         $application->setCatchExceptions(true);
-        $tester->run(array('command' => 'foo'));
+        $tester->run(array('command' => 'foo'), array('decorated' => false));
         $this->assertStringEqualsFile(self::$fixturesPath.'/application_renderexception1.txt', $this->normalize($tester->getDisplay()), '->setCatchExceptions() sets the catch exception flag');
 
         $application->setCatchExceptions(false);
         try {
-            $tester->run(array('command' => 'foo'));
+            $tester->run(array('command' => 'foo'), array('decorated' => false));
             $this->fail('->setCatchExceptions() sets the catch exception flag');
         } catch (\Exception $e) {
             $this->assertInstanceOf('\Exception', $e, '->setCatchExceptions() sets the catch exception flag');
@@ -225,8 +295,8 @@ class ApplicationTest extends \PHPUnit_Framework_TestCase
     {
         $application = new Application();
         $application->add(new \FooCommand);
-        $this->assertStringEqualsFile(self::$fixturesPath.'/application_astext1.txt', $application->asText(), '->asText() returns a text representation of the application');
-        $this->assertStringEqualsFile(self::$fixturesPath.'/application_astext2.txt', $application->asText('foo'), '->asText() returns a text representation of the application');
+        $this->assertStringEqualsFile(self::$fixturesPath.'/application_astext1.txt', str_replace(PHP_EOL, "\n", $application->asText()), '->asText() returns a text representation of the application');
+        $this->assertStringEqualsFile(self::$fixturesPath.'/application_astext2.txt', str_replace(PHP_EOL, "\n", $application->asText('foo')), '->asText() returns a text representation of the application');
     }
 
     public function testAsXml()
@@ -243,18 +313,18 @@ class ApplicationTest extends \PHPUnit_Framework_TestCase
         $application->setAutoExit(false);
         $tester = new ApplicationTester($application);
 
-        $tester->run(array('command' => 'foo'));
+        $tester->run(array('command' => 'foo'), array('decorated' => false));
         $this->assertStringEqualsFile(self::$fixturesPath.'/application_renderexception1.txt', $this->normalize($tester->getDisplay()), '->renderException() renders a pretty exception');
 
-        $tester->run(array('command' => 'foo'), array('verbosity' => Output::VERBOSITY_VERBOSE));
+        $tester->run(array('command' => 'foo'), array('decorated' => false, 'verbosity' => Output::VERBOSITY_VERBOSE));
         $this->assertRegExp('/Exception trace/', $this->normalize($tester->getDisplay()), '->renderException() renders a pretty exception with a stack trace when verbosity is verbose');
 
-        $tester->run(array('command' => 'list', '--foo' => true));
+        $tester->run(array('command' => 'list', '--foo' => true), array('decorated' => false));
         $this->assertStringEqualsFile(self::$fixturesPath.'/application_renderexception2.txt', $this->normalize($tester->getDisplay()), '->renderException() renders the command synopsis when an exception occurs in the context of a command');
 
         $application->add(new \Foo3Command);
         $tester = new ApplicationTester($application);
-        $tester->run(array('command' => 'foo3:bar'));
+        $tester->run(array('command' => 'foo3:bar'), array('decorated' => false));
         $this->assertStringEqualsFile(self::$fixturesPath.'/application_renderexception3.txt', $this->normalize($tester->getDisplay()), '->renderException() renders a pretty exceptions with previous exceptions');
 
     }
@@ -278,23 +348,23 @@ class ApplicationTest extends \PHPUnit_Framework_TestCase
         $application->setAutoExit(false);
         $application->setCatchExceptions(false);
         $tester = new ApplicationTester($application);
-        $tester->run(array());
+        $tester->run(array(), array('decorated' => false));
         $this->assertStringEqualsFile(self::$fixturesPath.'/application_run1.txt', $this->normalize($tester->getDisplay()), '->run() runs the list command if no argument is passed');
 
-        $tester->run(array('--help' => true));
+        $tester->run(array('--help' => true), array('decorated' => false));
         $this->assertStringEqualsFile(self::$fixturesPath.'/application_run2.txt', $this->normalize($tester->getDisplay()), '->run() runs the help command if --help is passed');
 
-        $tester->run(array('-h' => true));
+        $tester->run(array('-h' => true), array('decorated' => false));
         $this->assertStringEqualsFile(self::$fixturesPath.'/application_run2.txt', $this->normalize($tester->getDisplay()), '->run() runs the help command if -h is passed');
 
         $application = new Application();
         $application->setAutoExit(false);
         $application->setCatchExceptions(false);
         $tester = new ApplicationTester($application);
-        $tester->run(array('command' => 'list', '--help' => true));
+        $tester->run(array('command' => 'list', '--help' => true), array('decorated' => false));
         $this->assertStringEqualsFile(self::$fixturesPath.'/application_run3.txt', $this->normalize($tester->getDisplay()), '->run() displays the help if --help is passed');
 
-        $tester->run(array('command' => 'list', '-h' => true));
+        $tester->run(array('command' => 'list', '-h' => true), array('decorated' => false));
         $this->assertStringEqualsFile(self::$fixturesPath.'/application_run3.txt', $this->normalize($tester->getDisplay()), '->run() displays the help if -h is passed');
 
         $application = new Application();
@@ -311,10 +381,10 @@ class ApplicationTest extends \PHPUnit_Framework_TestCase
         $application->setAutoExit(false);
         $application->setCatchExceptions(false);
         $tester = new ApplicationTester($application);
-        $tester->run(array('--version' => true));
+        $tester->run(array('--version' => true), array('decorated' => false));
         $this->assertStringEqualsFile(self::$fixturesPath.'/application_run4.txt', $this->normalize($tester->getDisplay()), '->run() displays the program version if --version is passed');
 
-        $tester->run(array('-V' => true));
+        $tester->run(array('-V' => true), array('decorated' => false));
         $this->assertStringEqualsFile(self::$fixturesPath.'/application_run4.txt', $this->normalize($tester->getDisplay()), '->run() displays the program version if -v is passed');
 
         $application = new Application();
@@ -342,10 +412,39 @@ class ApplicationTest extends \PHPUnit_Framework_TestCase
         $application->setCatchExceptions(false);
         $application->add(new \FooCommand());
         $tester = new ApplicationTester($application);
-        $tester->run(array('command' => 'foo:bar', '--no-interaction' => true));
+        $tester->run(array('command' => 'foo:bar', '--no-interaction' => true), array('decorated' => false));
         $this->assertEquals("called\n", $this->normalize($tester->getDisplay()), '->run() does not called interact() if --no-interaction is passed');
 
-        $tester->run(array('command' => 'foo:bar', '-n' => true));
+        $tester->run(array('command' => 'foo:bar', '-n' => true), array('decorated' => false));
         $this->assertEquals("called\n", $this->normalize($tester->getDisplay()), '->run() does not called interact() if -n is passed');
+    }
+
+    /**
+     * @expectedException \LogicException
+     * @dataProvider getAddingAlreadySetDefinitionElementData
+     */
+    public function testAddingAlreadySetDefinitionElementData($def)
+    {
+        $application = new Application();
+        $application->setAutoExit(false);
+        $application->setCatchExceptions(false);
+        $application
+            ->register('foo')
+            ->setDefinition(array($def))
+            ->setCode(function (InputInterface $input, OutputInterface $output) {})
+        ;
+
+        $input = new ArrayInput(array('command' => 'foo'));
+        $output = new NullOutput();
+        $application->run($input, $output);
+    }
+
+    public function getAddingAlreadySetDefinitionElementData()
+    {
+        return array(
+            array(new InputArgument('command', InputArgument::REQUIRED)),
+            array(new InputOption('quiet', '', InputOption::VALUE_NONE)),
+            array(new InputOption('query', 'q', InputOption::VALUE_NONE)),
+        );
     }
 }

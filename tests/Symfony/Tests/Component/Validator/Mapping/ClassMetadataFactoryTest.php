@@ -20,7 +20,6 @@ use Symfony\Tests\Component\Validator\Fixtures\ConstraintA;
 use Symfony\Tests\Component\Validator\Fixtures\ConstraintB;
 use Symfony\Component\Validator\Mapping\ClassMetadataFactory;
 use Symfony\Component\Validator\Mapping\ClassMetadata;
-use Symfony\Component\Validator\Mapping\PropertyMetadata;
 use Symfony\Component\Validator\Mapping\Loader\LoaderInterface;
 
 class ClassMetadataFactoryTest extends \PHPUnit_Framework_TestCase
@@ -75,8 +74,10 @@ class ClassMetadataFactoryTest extends \PHPUnit_Framework_TestCase
             new ConstraintA(array('groups' => array('Default', 'EntityParent'))),
         );
 
+        $cache->expects($this->never())
+              ->method('has');
         $cache->expects($this->once())
-              ->method('has')
+              ->method('read')
               ->with($this->equalTo(self::PARENTCLASS))
               ->will($this->returnValue(false));
         $cache->expects($this->once())
@@ -104,10 +105,8 @@ class ClassMetadataFactoryTest extends \PHPUnit_Framework_TestCase
         $loader->expects($this->never())
                ->method('loadClassMetadata');
 
-        $cache->expects($this->once())
-              ->method('has')
-              ->with($this->equalTo(self::PARENTCLASS))
-              ->will($this->returnValue(true));
+        $cache->expects($this->never())
+              ->method('has');
         $cache->expects($this->once())
               ->method('read')
               ->will($this->returnValue($metadata));

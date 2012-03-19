@@ -54,8 +54,8 @@ abstract class FrameworkExtensionTest extends TestCase
     {
         $container = $this->createContainerFromFile('full');
 
-        $this->assertTrue($container->hasDefinition('router'), '->registerRouterConfiguration() loads routing.xml');
-        $arguments = $container->getDefinition('router')->getArguments();
+        $this->assertTrue($container->has('router'), '->registerRouterConfiguration() loads routing.xml');
+        $arguments = $container->findDefinition('router')->getArguments();
         $this->assertEquals($container->getParameter('kernel.root_dir').'/config/routing.xml', $container->getParameter('router.resource'), '->registerRouterConfiguration() sets routing resource');
         $this->assertEquals('%router.resource%', $arguments[1], '->registerRouterConfiguration() sets routing resource');
         $this->assertEquals('xml', $arguments[2]['resource_type'], '->registerRouterConfiguration() sets routing resource type');
@@ -76,18 +76,48 @@ abstract class FrameworkExtensionTest extends TestCase
         $container = $this->createContainerFromFile('full');
 
         $this->assertTrue($container->hasDefinition('session'), '->registerSessionConfiguration() loads session.xml');
-        $this->assertEquals('fr', $container->getParameter('session.default_locale'));
-        $this->assertEquals('%session.default_locale%', $container->getDefinition('session')->getArgument(1));
-        $this->assertTrue($container->getDefinition('session')->hasMethodCall('start'));
+        $this->assertEquals('fr', $container->getParameter('kernel.default_locale'));
+        $this->assertTrue($container->getDefinition('session_listener')->getArgument(1));
         $this->assertEquals('session.storage.native', (string) $container->getAlias('session.storage'));
+        $this->assertEquals('session.handler.native_file', (string) $container->getAlias('session.handler'));
 
         $options = $container->getParameter('session.storage.options');
         $this->assertEquals('_SYMFONY', $options['name']);
-        $this->assertEquals(86400, $options['lifetime']);
-        $this->assertEquals('/', $options['path']);
-        $this->assertEquals('example.com', $options['domain']);
-        $this->assertTrue($options['secure']);
-        $this->assertTrue($options['httponly']);
+        $this->assertEquals(86400, $options['cookie_lifetime']);
+        $this->assertEquals('/', $options['cookie_path']);
+        $this->assertEquals('example.com', $options['cookie_domain']);
+        $this->assertTrue($options['cookie_secure']);
+        $this->assertTrue($options['cookie_httponly']);
+    }
+
+    public function testSessionDeprecatedMergeFull()
+    {
+        $container = $this->createContainerFromFile('deprecated_merge_full');
+
+        $this->assertTrue($container->hasDefinition('session'), '->registerSessionConfiguration() loads session.xml');
+
+        $options = $container->getParameter('session.storage.options');
+        $this->assertEquals('_SYMFONY', $options['name']);
+        $this->assertEquals(86400, $options['cookie_lifetime']);
+        $this->assertEquals('/', $options['cookie_path']);
+        $this->assertEquals('example.com', $options['cookie_domain']);
+        $this->assertTrue($options['cookie_secure']);
+        $this->assertTrue($options['cookie_httponly']);
+    }
+
+    public function testSessionDeprecatedMergePartial()
+    {
+        $container = $this->createContainerFromFile('deprecated_merge_partial');
+
+        $this->assertTrue($container->hasDefinition('session'), '->registerSessionConfiguration() loads session.xml');
+
+        $options = $container->getParameter('session.storage.options');
+        $this->assertEquals('_SYMFONY', $options['name']);
+        $this->assertEquals(86400, $options['cookie_lifetime']);
+        $this->assertEquals('/', $options['cookie_path']);
+        $this->assertEquals('sf2.example.com', $options['cookie_domain']);
+        $this->assertFalse($options['cookie_secure']);
+        $this->assertTrue($options['cookie_httponly']);
     }
 
     public function testTemplating()
@@ -95,6 +125,8 @@ abstract class FrameworkExtensionTest extends TestCase
         $container = $this->createContainerFromFile('full');
 
         $this->assertTrue($container->hasDefinition('templating.name_parser'), '->registerTemplatingConfiguration() loads templating.xml');
+
+        $this->assertEquals('request', $container->getDefinition('templating.helper.assets')->getScope(), '->registerTemplatingConfiguration() sets request scope on assets helper if one or more packages are request-scoped');
 
         // default package should have one http base url and path package ssl url
         $this->assertTrue($container->hasDefinition('templating.asset.default_package.http'));
@@ -104,7 +136,7 @@ abstract class FrameworkExtensionTest extends TestCase
         $arguments = array_values($package->getArguments());
         $this->assertEquals(array('http://cdn.example.com'), $arguments[0]);
         $this->assertEquals('SomeVersionScheme', $arguments[1]);
-        $this->assertNull($arguments[2]);
+        $this->assertEquals('%%s?%%s', $arguments[2]);
 
         $this->assertTrue($container->hasDefinition('templating.asset.default_package.ssl'));
         $package = $container->getDefinition('templating.asset.default_package.ssl');
@@ -125,27 +157,34 @@ abstract class FrameworkExtensionTest extends TestCase
         $this->assertEquals(array('FrameworkBundle:Form', 'theme1', 'theme2'), $container->getParameter('templating.helper.form.resources'), '->registerTemplatingConfiguration() registers the theme and adds the base theme');
     }
 
+    public function testTemplatingAssetsHelperScopeDependsOnPackageArgumentScopes()
+    {
+        $container = $this->createContainerFromFile('templating_url_package');
+
+        $this->assertNotEquals('request', $container->getDefinition('templating.helper.assets')->getScope(), '->registerTemplatingConfiguration() does not set request scope on assets helper if no packages are request-scoped');
+    }
+
     public function testTranslator()
     {
         $container = $this->createContainerFromFile('full');
 
-        $this->assertTrue($container->hasDefinition('translator.real'), '->registerTranslatorConfiguration() loads translation.xml');
-        $this->assertEquals('translator.real', (string) $container->getAlias('translator'), '->registerTranslatorConfiguration() redefines translator service from identity to real translator');
+        $this->assertTrue($container->hasDefinition('translator.default'), '->registerTranslatorConfiguration() loads translation.xml');
+        $this->assertEquals('translator.default', (string) $container->getAlias('translator'), '->registerTranslatorConfiguration() redefines translator service from identity to real translator');
 
         $resources = array();
-        foreach ($container->getDefinition('translator.real')->getMethodCalls() as $call) {
+        foreach ($container->getDefinition('translator.default')->getMethodCalls() as $call) {
             if ('addResource' == $call[0]) {
                 $resources[] = $call[1];
             }
         }
 
         $this->assertContains(
-            realpath(__DIR__.'/../../Resources/translations/validators.fr.xliff'),
+            realpath(__DIR__.'/../../Resources/translations/validators.fr.xlf'),
             array_map(function($resource) use ($resources) { return realpath($resource[1]); }, $resources),
             '->registerTranslatorConfiguration() finds FrameworkExtension translation resources'
         );
 
-        $calls = $container->getDefinition('translator.real')->getMethodCalls();
+        $calls = $container->getDefinition('translator.default')->getMethodCalls();
         $this->assertEquals('fr', $calls[0][1][0]);
     }
 
@@ -187,6 +226,13 @@ abstract class FrameworkExtensionTest extends TestCase
         $this->assertInstanceOf('Doctrine\Common\Annotations\FileCacheReader', $container->get('annotation_reader'));
     }
 
+    public function testFileLinkFormat()
+    {
+        $container = $this->createContainerFromFile('full');
+
+        $this->assertEquals('file%link%format', $container->getParameter('templating.helper.code.file_link_format'));
+    }
+
     public function testValidationAnnotations()
     {
         $container = $this->createContainerFromFile('validation_annotations');
@@ -211,12 +257,12 @@ abstract class FrameworkExtensionTest extends TestCase
         ));
 
         $yamlArgs = $container->getParameter('validator.mapping.loader.yaml_files_loader.mapping_files');
-        $this->assertEquals(1, count($yamlArgs));
+        $this->assertCount(1, $yamlArgs);
         $this->assertStringEndsWith('TestBundle'.DIRECTORY_SEPARATOR.'Resources'.DIRECTORY_SEPARATOR.'config'.DIRECTORY_SEPARATOR.'validation.yml', $yamlArgs[0]);
 
         $xmlArgs = $container->getParameter('validator.mapping.loader.xml_files_loader.mapping_files');
-        $this->assertEquals(2, count($xmlArgs));
-        $this->assertStringEndsWith('Component/Form/Resources/config/validation.xml', $xmlArgs[0]);
+        $this->assertCount(2, $xmlArgs);
+        $this->assertStringEndsWith('Component'.DIRECTORY_SEPARATOR.'Form/Resources/config/validation.xml', $xmlArgs[0]);
         $this->assertStringEndsWith('TestBundle'.DIRECTORY_SEPARATOR.'Resources'.DIRECTORY_SEPARATOR.'config'.DIRECTORY_SEPARATOR.'validation.xml', $xmlArgs[1]);
     }
 

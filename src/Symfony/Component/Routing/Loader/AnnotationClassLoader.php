@@ -17,7 +17,7 @@ use Symfony\Component\Config\Resource\FileResource;
 use Symfony\Component\Routing\Route;
 use Symfony\Component\Routing\RouteCollection;
 use Symfony\Component\Config\Loader\LoaderInterface;
-use Symfony\Component\Config\Loader\LoaderResolver;
+use Symfony\Component\Config\Loader\LoaderResolverInterface;
 
 /**
  * AnnotationClassLoader loads routing information from a PHP class and its methods.
@@ -105,6 +105,10 @@ abstract class AnnotationClassLoader implements LoaderInterface
         );
 
         $class = new \ReflectionClass($class);
+        if ($class->isAbstract()) {
+            throw new \InvalidArgumentException(sprintf('Annotations from class "%s" cannot be read as it is abstract.', $class));
+        }
+
         if ($annot = $this->reader->getClassAnnotation($class, $this->routeAnnotationClass)) {
             if (null !== $annot->getPattern()) {
                 $globals['pattern'] = $annot->getPattern();
@@ -140,8 +144,9 @@ abstract class AnnotationClassLoader implements LoaderInterface
 
     protected function addRoute(RouteCollection $collection, $annot, $globals, \ReflectionClass $class, \ReflectionMethod $method)
     {
-        if (null === $annot->getName()) {
-            $annot->setName($this->getDefaultRouteName($class, $method));
+        $name = $annot->getName();
+        if (null === $name) {
+            $name = $this->getDefaultRouteName($class, $method);
         }
 
         $defaults = array_merge($globals['defaults'], $annot->getDefaults());
@@ -152,7 +157,7 @@ abstract class AnnotationClassLoader implements LoaderInterface
 
         $this->configureRoute($route, $class, $method, $annot);
 
-        $collection->add($annot->getName(), $route);
+        $collection->add($name, $route);
     }
 
     /**
@@ -171,16 +176,16 @@ abstract class AnnotationClassLoader implements LoaderInterface
     /**
      * Sets the loader resolver.
      *
-     * @param LoaderResolver $resolver A LoaderResolver instance
+     * @param LoaderResolverInterface $resolver A LoaderResolverInterface instance
      */
-    public function setResolver(LoaderResolver $resolver)
+    public function setResolver(LoaderResolverInterface $resolver)
     {
     }
 
     /**
      * Gets the loader resolver.
      *
-     * @return LoaderResolver A LoaderResolver instance
+     * @return LoaderResolverInterface A LoaderResolverInterface instance
      */
     public function getResolver()
     {

@@ -11,7 +11,6 @@
 
 namespace Symfony\Component\Routing\Matcher\Dumper;
 
-use Symfony\Component\Routing\Route;
 
 /**
  * Dumps a set of Apache mod_rewrite rules.
@@ -47,10 +46,19 @@ class ApacheMatcherDumper extends MatcherDumper
             $compiledRoute = $route->compile();
 
             // prepare the apache regex
-            $regex = preg_replace('/\?P<.+?>/', '', substr(str_replace(array("\n", ' '), '', $compiledRoute->getRegex()), 1, -2));
+            $regex = preg_replace('/\?P<.+?>/', '', substr(str_replace(array("\n", ' '), '', $compiledRoute->getRegex()), 1, -3));
             $regex = '^'.preg_quote($options['base_uri']).substr($regex, 1);
 
-            $hasTrailingSlash = '/$' == substr($regex, -2) && '^/$' != $regex;
+            $methods = array();
+            if ($req = $route->getRequirement('_method')) {
+                $methods = explode('|', strtoupper($req));
+                // GET and HEAD are equivalent
+                if (in_array('GET', $methods) && !in_array('HEAD', $methods)) {
+                    $methods[] = 'HEAD';
+                }
+            }
+
+            $hasTrailingSlash = (!$methods || in_array('HEAD', $methods)) && '/$' == substr($regex, -2) && '^/$' != $regex;
 
             $variables = array('E=_ROUTING__route:'.$name);
             foreach ($compiledRoute->getVariables() as $i => $variable) {

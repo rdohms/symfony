@@ -51,6 +51,11 @@ class RouteCompiler implements RouteCompilerInterface
             }
 
             $tokens[] = array('variable', $match[0][0][0], $regexp, $var);
+
+            if (in_array($var, $variables)) {
+                throw new \LogicException(sprintf('Route pattern "%s" cannot reference variable name "%s" more than once.', $route->getPattern(), $var));
+            }
+
             $variables[] = $var;
         }
 
@@ -96,7 +101,7 @@ class RouteCompiler implements RouteCompilerInterface
         return new CompiledRoute(
             $route,
             'text' === $tokens[0][0] ? $tokens[0][1] : '',
-            sprintf("#^\n%s$#x", $regex),
+            sprintf("#^\n%s$#xs", $regex),
             array_reverse($tokens),
             $variables
         );

@@ -18,6 +18,7 @@ use Symfony\Component\HttpKernel\Event\FilterResponseEvent;
 use Symfony\Component\HttpKernel\Event\GetResponseEvent;
 use Symfony\Component\HttpKernel\Event\GetResponseForControllerResultEvent;
 use Symfony\Component\HttpKernel\Event\GetResponseForExceptionEvent;
+use Symfony\Component\HttpKernel\Event\PostResponseEvent;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
@@ -26,8 +27,10 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
  * HttpKernel notifies events to convert a Request object to a Response one.
  *
  * @author Fabien Potencier <fabien@symfony.com>
+ *
+ * @api
  */
-class HttpKernel implements HttpKernelInterface
+class HttpKernel implements HttpKernelInterface, TerminableInterface
 {
     private $dispatcher;
     private $resolver;
@@ -37,6 +40,8 @@ class HttpKernel implements HttpKernelInterface
      *
      * @param EventDispatcherInterface    $dispatcher An EventDispatcherInterface instance
      * @param ControllerResolverInterface $resolver   A ControllerResolverInterface instance
+     *
+     * @api
      */
     public function __construct(EventDispatcherInterface $dispatcher, ControllerResolverInterface $resolver)
     {
@@ -58,6 +63,8 @@ class HttpKernel implements HttpKernelInterface
      * @return Response A Response instance
      *
      * @throws \Exception When an Exception occurs during processing
+     *
+     * @api
      */
     public function handle(Request $request, $type = HttpKernelInterface::MASTER_REQUEST, $catch = true)
     {
@@ -70,6 +77,16 @@ class HttpKernel implements HttpKernelInterface
 
             return $this->handleException($e, $request, $type);
         }
+    }
+
+    /**
+     * {@inheritdoc}
+     *
+     * @api
+     */
+    public function terminate(Request $request, Response $response)
+    {
+        $this->dispatcher->dispatch(KernelEvents::TERMINATE, new PostResponseEvent($this, $request, $response));
     }
 
     /**

@@ -81,7 +81,7 @@ class NumberToLocalizedStringTransformerTest extends LocalizedTestCase
     {
         $transformer = new NumberToLocalizedStringTransformer();
 
-        $this->assertSame(null, $transformer->reverseTransform(''));
+        $this->assertNull($transformer->reverseTransform(''));
     }
 
     public function testReverseTransformWithGrouping()
@@ -122,5 +122,56 @@ class NumberToLocalizedStringTransformerTest extends LocalizedTestCase
         $transformer = new NumberToLocalizedStringTransformer();
 
         $transformer->reverseTransform('foo');
+    }
+
+    /**
+     * @expectedException Symfony\Component\Form\Exception\TransformationFailedException
+     * @link https://github.com/symfony/symfony/issues/3161
+     */
+    public function testReverseTransformDisallowsNaN()
+    {
+        $transformer = new NumberToLocalizedStringTransformer();
+
+        $transformer->reverseTransform('NaN');
+    }
+
+    /**
+     * @expectedException Symfony\Component\Form\Exception\TransformationFailedException
+     */
+    public function testReverseTransformDisallowsNaN2()
+    {
+        $transformer = new NumberToLocalizedStringTransformer();
+
+        $transformer->reverseTransform('nan');
+    }
+
+    /**
+     * @expectedException Symfony\Component\Form\Exception\TransformationFailedException
+     */
+    public function testReverseTransformDisallowsInfinity()
+    {
+        $transformer = new NumberToLocalizedStringTransformer();
+
+        $transformer->reverseTransform('∞');
+    }
+
+    /**
+     * @expectedException Symfony\Component\Form\Exception\TransformationFailedException
+     */
+    public function testReverseTransformDisallowsInfinity2()
+    {
+        $transformer = new NumberToLocalizedStringTransformer();
+
+        $transformer->reverseTransform('∞,123');
+    }
+
+    /**
+     * @expectedException Symfony\Component\Form\Exception\TransformationFailedException
+     */
+    public function testReverseTransformDisallowsNegativeInfinity()
+    {
+        $transformer = new NumberToLocalizedStringTransformer();
+
+        $transformer->reverseTransform('-∞');
     }
 }
